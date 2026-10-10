@@ -282,3 +282,12 @@ body.tab-dragging * {
   margin: 4px 0;
   background: #dde2e8;
 }
+
+.file-input {
+  display: none;
+}
+
+body.busy,
+body.busy * {
+  cursor: progress !important;
+}

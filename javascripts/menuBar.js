@@ -5,7 +5,15 @@ class MenuBar {
   constructor(app, container) {
     this.app = app;
     this.menus = [
-      { label: 'ファイル', items: [] },
+      {
+        label: 'ファイル',
+        items: [
+          { label: 'ファイルを開く', shortcut: 'Ctrl+O', action: () => app.openFileDialog() },
+          { label: '名前をつけて保存', shortcut: 'Ctrl+S', action: () => app.saveJson() },
+          { label: 'SVGで保存', action: () => app.saveSvg() },
+          { label: 'PDFで保存', action: () => app.savePdf() },
+        ],
+      },
       {
         label: '編集',
         items: [

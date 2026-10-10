@@ -47,6 +47,17 @@ const Model = {
     };
   },
 
+  // タブとその全アイテムに新しい ID を振る（外部ファイルから追加する時に既存の ID と重ならないように）
+  reassignIds(tab) {
+    const walk = (item) => {
+      item.id = Util.newId();
+      item.children.forEach(walk);
+    };
+    tab.id = Util.newId();
+    walk(tab.root);
+    return tab;
+  },
+
   // id -> { item, parent, index, depth, tab, order }（order は文書順の通し番号）
   buildIndex(doc) {
     const map = new Map();

@@ -24,6 +24,25 @@ class Application {
     this.tabBar = new TabBar(this, tabBar);
     this.mainArea = new MainArea(this, main);
 
+    // ファイルを開く（OS 標準のダイアログ）・画面へのドロップ
+    this.fileInput = Util.el('input', 'file-input');
+    this.fileInput.type = 'file';
+    this.fileInput.accept = '.json,.svg,application/json,image/svg+xml';
+    this.fileInput.addEventListener('change', () => this.openFiles([...this.fileInput.files]));
+    rootEl.append(this.fileInput);
+    window.addEventListener('dragover', (e) => {
+      if (e.dataTransfer && [...e.dataTransfer.types].includes('Files')) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }
+    });
+    window.addEventListener('drop', (e) => {
+      if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+        e.preventDefault();
+        this.openFiles([...e.dataTransfer.files]);
+      }
+    });
+
     document.addEventListener('keydown', (e) => this.onKeyDown(e));
     // 文字入力中以外のコピー・切り取り・貼り付け（文字入力欄では標準動作）
     document.addEventListener('copy', (e) => this.onClipboardEvent(e, 'copy'));
@@ -233,6 +252,74 @@ class Application {
     this.mainArea.draw();
   }
 
+  // ---- ファイル ----
+
+  // 文字入力・タブ名編集を確定する（保存・ファイル操作の前に）
+  finishInput() {
+    this.editor.end();
+    this.tabBar.finishRename(true);
+  }
+
+  openFileDialog() {
+    this.finishInput();
+    this.fileInput.value = '';
+    this.fileInput.click();
+  }
+
+  // JSON / SVG（metadata の JSON）を読み込み、常に新しいタブとして末尾に追加する
+  async openFiles(files) {
+    for (const file of files) {
+      let tabs = null;
+      try {
+        tabs = FileExport.parseFile(await file.text());
+      } catch (e) {
+        tabs = null;
+      }
+      if (!tabs || tabs.length === 0) {
+        alert('アプリケーションで開ける形式ではありませんでした');
+        continue;
+      }
+      this.finishInput();
+      this.commit((doc) => {
+        doc.tabs.push(...tabs);
+        this.setActiveTab(tabs[tabs.length - 1].id);
+        return { tabId: this.activeTabId };
+      });
+    }
+  }
+
+  // 表示タブだけを内部データ形式の JSON で保存する
+  saveJson() {
+    this.finishInput();
+    const tab = this.activeTab;
+    FileExport.download(new Blob([FileExport.tabJson(tab)], { type: 'application/json' }), FileExport.fileName(this.tabTitle(tab), '.json'));
+  }
+
+  // 表示タブを SVG 画像で保存する（metadata に「名前をつけて保存」と同じ JSON を埋め込む）
+  saveSvg() {
+    this.finishInput();
+    const tab = this.activeTab;
+    const svg = FileExport.buildSvg(FileExport.scene(this.mainArea.layout), FileExport.tabJson(tab));
+    FileExport.download(new Blob([svg], { type: 'image/svg+xml' }), FileExport.fileName(this.tabTitle(tab), '.svg'));
+  }
+
+  // 表示タブを PDF で保存する（ライブラリ・フォントは初回に読み込む）
+  async savePdf() {
+    this.finishInput();
+    const tab = this.activeTab;
+    const scene = FileExport.scene(this.mainArea.layout);
+    document.body.classList.add('busy');
+    try {
+      const bytes = await FileExport.buildPdf(scene);
+      FileExport.download(new Blob([bytes], { type: 'application/pdf' }), FileExport.fileName(this.tabTitle(tab), '.pdf'));
+    } catch (e) {
+      console.error(e);
+      alert('PDFの作成に失敗しました');
+    } finally {
+      document.body.classList.remove('busy');
+    }
+  }
+
   // ---- ツリーを全て開く／閉じる ----
 
   // 選択アイテム（無ければルート）とその全ての子孫を開く／閉じる。子のあるアイテムだけを対象にする
@@ -388,6 +475,16 @@ class Application {
   onKeyDown(e) {
     if (this.mainArea.handleKeyDown(e)) return;
     if (e.key === 'Escape' && this.menuBar.closeAll()) return;
+    // ファイルを開く・保存は文字入力中も有効（ブラウザ標準の動作を抑止）
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !e.isComposing) {
+      const k = e.key.toLowerCase();
+      if (k === 'o' || k === 's') {
+        e.preventDefault();
+        if (k === 'o') this.openFileDialog();
+        else this.saveJson();
+        return;
+      }
+    }
     if (Util.isTextInput(e.target) || e.isComposing) return;
     const ctrl = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();
