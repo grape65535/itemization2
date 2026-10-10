@@ -182,6 +182,60 @@ const ItemClipboard = {
     return rows;
   },
 
+  // 番号付き箇条書き（1. / 1.1. …）。兄弟の番号の桁数が違っても文字列の開始位置が揃うよう番号の後ろを空白で埋める。
+  // 子は親の文字列の開始位置からインデントする
+  toNumbered(clips) {
+    const out = [];
+    const walk = (list, prefix, indent) => {
+      if (list.length === 0) return;
+      const labels = list.map((c, i) => prefix + (i + 1) + '.');
+      const width = Math.max(...labels.map((l) => l.length)) + 1;
+      const textIndent = indent + ' '.repeat(width);
+      list.forEach((c, i) => {
+        const lines = c.text.split('\n');
+        out.push(indent + labels[i].padEnd(width) + lines[0]);
+        for (const line of lines.slice(1)) out.push(line ? textIndent + line : '');
+        walk(c.children, labels[i], textIndent);
+      });
+    };
+    walk(clips, '', '');
+    return out.join('\n');
+  },
+
+  // マークダウンの箇条書き（- ＋ 階層ごとに 2 空白）。複数行のアイテムは行末の 2 空白で改行を表す
+  toMarkdown(clips) {
+    const out = [];
+    const walk = (list, depth) => {
+      const indent = '  '.repeat(depth);
+      for (const c of list) {
+        const lines = c.text.split('\n');
+        lines.forEach((line, i) => {
+          const hardBreak = i < lines.length - 1 ? '  ' : '';
+          out.push((i === 0 ? indent + '- ' : indent + '  ') + line + hardBreak);
+        });
+        walk(c.children, depth + 1);
+      }
+    };
+    walk(clips, 0);
+    return out.join('\n');
+  },
+
+  // CSV/TSV。ルートから末端までの経路ごとに 1 行（貼り付けの逆）。行ごとに列数は異なってよい
+  toDelimited(clips, delimiter) {
+    const rows = [];
+    const walk = (c, path) => {
+      const next = path.concat(c.text);
+      if (c.children.length === 0) rows.push(next);
+      else for (const child of c.children) walk(child, next);
+    };
+    for (const c of clips) walk(c, []);
+    const quote = (v) => {
+      const needs = v.includes(delimiter) || /["\n\r]/.test(v) || /^[ \t\u3000]|[ \t\u3000]$/.test(v);
+      return needs ? '"' + v.replace(/"/g, '""') + '"' : v;
+    };
+    return rows.map((row) => row.map(quote).join(delimiter)).join('\n');
+  },
+
   indentWidth(s) {
     let w = 0;
     for (const ch of s) w += ch === '\t' ? 4 : ch === '　' ? 2 : 1;

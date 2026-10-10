@@ -10,6 +10,7 @@ class Application {
     this.selection = new Set();
     this.history = new History(Config.historyLimit);
     this.pseudoClipboard = null; // アプリ内の擬似クリップボード { clips, text }
+    this.copyTextOverride = null; // 「〜としてコピー」でクリップボードに書く文字列
 
     const header = Util.el('header', 'app-header');
     const menus = Util.el('nav', 'menus');
@@ -271,6 +272,12 @@ class Application {
       this.paste(dt.getData(ItemClipboard.MIME), dt.getData('text/plain'));
       return;
     }
+    if (type === 'copy' && this.copyTextOverride !== null) {
+      e.preventDefault();
+      this.clipboardEventFired = true;
+      e.clipboardData.setData('text/plain', this.copyTextOverride);
+      return;
+    }
     const data = this.clipboardData();
     if (!data) return;
     e.preventDefault();
@@ -298,6 +305,26 @@ class Application {
       if (navigator.clipboard) navigator.clipboard.writeText(data.text).catch(() => {});
       if (cut) this.deleteSelected();
     }
+  }
+
+  // 番号付き箇条書き・マークダウン・CSV・TSV としてコピー（文字列のみ。JSON は書き込まない）
+  copyAs(format) {
+    this.editor.end();
+    const ids = this.selectedIds();
+    if (ids.length === 0) return;
+    const clips = ItemClipboard.fromSelection(this.index, ids);
+    const text = format === 'numbered' ? ItemClipboard.toNumbered(clips)
+      : format === 'markdown' ? ItemClipboard.toMarkdown(clips)
+        : ItemClipboard.toDelimited(clips, format === 'tsv' ? '\t' : ',');
+    this.clipboardEventFired = false;
+    this.copyTextOverride = text;
+    try {
+      document.execCommand('copy');
+    } catch (e) {
+      // 下でフォールバック
+    }
+    this.copyTextOverride = null;
+    if (!this.clipboardEventFired && navigator.clipboard) navigator.clipboard.writeText(text).catch(() => {});
   }
 
   // メニューからの貼り付け（ブラウザの許可が得られなければ擬似クリップボードのみ）

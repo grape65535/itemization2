@@ -86,6 +86,7 @@ body.tab-dragging * {
 
 .menu-item {
   display: flex;
+  white-space: nowrap;
   justify-content: space-between;
   gap: 24px;
   width: 100%;
