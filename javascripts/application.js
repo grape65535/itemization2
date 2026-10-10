@@ -475,6 +475,7 @@ class Application {
   onKeyDown(e) {
     if (this.mainArea.handleKeyDown(e)) return;
     if (e.key === 'Escape' && this.menuBar.closeAll()) return;
+    if (e.key === 'Escape' && this.mainArea.toolbar.closePopup()) return;
     // ファイルを開く・保存は文字入力中も有効（ブラウザ標準の動作を抑止）
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !e.isComposing) {
       const k = e.key.toLowerCase();

@@ -1,8 +1,9 @@
 'use strict';
 
-// 文字入力中にアイテムの上に表示する装飾のツールバー。
-// フォントサイズ・太字・取消し線・下線・文字色・文字背景色は選択中の文字列だけに、
-// アイテム背景色・左寄せ・中央寄せ・右寄せは選択に関係なくアイテム全体に適用する。
+// 文字装飾のツールバー。文字入力中はそのアイテムの上に、文字入力中以外でアイテム選択中は最後に選択したアイテムの上に表示する。
+// 文字入力中: フォントサイズ・太字・取消し線・下線・文字色・文字背景色は選択中の文字列だけに、
+//            アイテム背景色・寄せ方・装飾を消すはアイテム全体に適用する（操作先は ItemEditor）。
+// アイテム選択中: すべての操作を選択中の各アイテムの文字列全体に適用する（操作先は SelectionDecorator）。
 class EditToolbar {
   constructor(area, container) {
     this.area = area;
@@ -10,6 +11,8 @@ class EditToolbar {
     this.el.style.display = 'none';
     container.append(this.el);
     this.popup = null; // { id, el }
+    this.selectionDecorator = new SelectionDecorator(area.app);
+    this.shownKey = null; // 表示中の対象（変わったらポップアップを閉じる）
     // 最後に選んだ色（ボタンのアイコンに表示する）
     this.lastColor = { color: Config.palette[3].text, bg: Config.palette[5].pale, fill: Config.palette[9].pale };
 
@@ -27,6 +30,8 @@ class EditToolbar {
       { id: 'left', title: '左寄せ', icon: ICON.left, action: (ed) => ed.setAlign('left') },
       { id: 'center', title: '中央寄せ', icon: ICON.center, action: (ed) => ed.setAlign('center') },
       { id: 'right', title: '右寄せ', icon: ICON.right, action: (ed) => ed.setAlign('right') },
+      { separator: true },
+      { id: 'clear', title: '装飾を消す', icon: ICON.clear, action: (ed) => ed.clearDecoration() },
     ];
     this.buttons = new Map();
     for (const def of defs) {
@@ -91,6 +96,11 @@ class EditToolbar {
     return this.area.editor;
   }
 
+  // 操作先（文字入力中は ItemEditor、それ以外は選択中のアイテム）
+  get target() {
+    return this.editor.isEditing ? this.editor : this.selectionDecorator;
+  }
+
   onClick(e) {
     const option = e.target.closest('[data-value]');
     if (option && this.popup) {
@@ -107,12 +117,12 @@ class EditToolbar {
       return;
     }
     this.closePopup();
-    def.action(this.editor);
+    def.action(this.target);
   }
 
   // ポップアップで選んだ値を適用する（null は解除）
   choose(id, value) {
-    const ed = this.editor;
+    const ed = this.target;
     this.closePopup();
     if (id === 'size') {
       const size = Number(value);
@@ -126,7 +136,7 @@ class EditToolbar {
 
   openPopup(id) {
     this.closePopup();
-    const info = this.editor.selectionInfo();
+    const info = this.target.selectionInfo();
     const popup = Util.el('div', 'edit-toolbar-popup');
     if (id === 'size') {
       popup.classList.add('size-list');
@@ -174,8 +184,24 @@ class EditToolbar {
     return true;
   }
 
-  // アイテムの上に表示する（上に余地が無ければ下）
-  show(node) {
+  // 文字入力中以外の表示：選択中のアイテムがあれば最後に選択したアイテムの上に表示し、無ければ隠す
+  syncSelection() {
+    if (this.editor.isEditing) return;
+    const area = this.area;
+    const ids = this.selectionDecorator.ids();
+    const node = area.layout && !(area.drag && area.drag.type !== 'pending') ? this.selectionDecorator.anchorNode(area.layout) : null;
+    if (!node) {
+      this.hide();
+      return;
+    }
+    this.show(node, 'sel:' + ids.join(','));
+    this.update();
+  }
+
+  // アイテムの上に表示する（上に余地が無ければ下）。key は表示対象を表す文字列
+  show(node, key = 'edit:' + node.id) {
+    if (key !== this.shownKey) this.closePopup();
+    this.shownKey = key;
     const C = Config;
     const scroller = this.area.scroller;
     let top = node.y - C.toolbarHeight - C.toolbarGap;
@@ -186,6 +212,7 @@ class EditToolbar {
   }
 
   hide() {
+    this.shownKey = null;
     this.closePopup();
     this.hideTooltip();
     this.el.style.display = 'none';
@@ -193,8 +220,7 @@ class EditToolbar {
 
   // 選択範囲に合わせてボタンの有効・無効と状態を更新する
   update() {
-    if (!this.editor.isEditing) return;
-    const info = this.editor.selectionInfo();
+    const info = this.target.selectionInfo();
     for (const { def, button } of this.buttons.values()) {
       const disabled = !!def.textOnly && !info.hasSelection;
       button.classList.toggle('disabled', disabled);
@@ -234,5 +260,111 @@ EditToolbar.ICONS = (() => {
     left: svg(lines([[3, 14], [3, 9], [3, 14], [3, 9]])),
     center: svg(lines([[3, 14], [5.5, 9], [3, 14], [5.5, 9]])),
     right: svg(lines([[3, 14], [8, 9], [3, 14], [8, 9]])),
+    clear: svg(`<text x="8.5" y="15" ${font} font-size="14" font-weight="bold" text-anchor="middle" fill="currentColor">A</text>` +
+      '<path d="M3 17 L17 3" stroke="#e60000" stroke-width="1.8" stroke-linecap="round"/>' +
+      '<path d="M13 13 l5 5 M18 13 l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'),
   };
 })();
+
+// 文字入力中以外で、選択中のアイテム（アクティブタブ内）の文字列全体に装飾を適用する。ItemEditor と同じ操作を持つ
+class SelectionDecorator {
+  constructor(app) {
+    this.app = app;
+  }
+
+  ids() {
+    return this.app.selectedIds();
+  }
+
+  // 最後に選択したアイテムの表示位置（折り畳みで見えなければ、その前に選択した見えるアイテム）
+  anchorNode(layout) {
+    const app = this.app;
+    const selected = [...app.selection].filter((id) => {
+      const entry = app.index.get(id);
+      return entry && entry.tab.id === app.activeTabId;
+    });
+    for (let i = selected.length - 1; i >= 0; i--) {
+      const node = layout.nodes.get(selected[i]);
+      if (node) return node;
+    }
+    return null;
+  }
+
+  items() {
+    return this.ids().map((id) => this.app.index.get(id).item);
+  }
+
+  // 選択中の全アイテムの文字をつなげて、文字入力中と同じ形で状態を返す（アイテムの区切りは改行として無視される）
+  selectionInfo() {
+    const items = this.items();
+    let text = '';
+    let styles = [];
+    items.forEach((item, i) => {
+      if (i > 0) {
+        text += '\n';
+        styles.push(null);
+      }
+      text += item.text;
+      styles = styles.concat(RichText.toArray(item.text, item.spans));
+    });
+    const common = (values) => (values.every((v) => v === values[0]) ? values[0] : null);
+    const n = text.length;
+    return {
+      hasSelection: items.length > 0,
+      bold: RichText.allHave(styles, text, 0, n, 'bold'),
+      strike: RichText.allHave(styles, text, 0, n, 'strike'),
+      underline: RichText.allHave(styles, text, 0, n, 'underline'),
+      size: RichText.commonValue(styles, text, 0, n, (st) => RichText.sizeOf(st)),
+      color: RichText.commonValue(styles, text, 0, n, (st) => (st && st.color) || ''),
+      bg: RichText.commonValue(styles, text, 0, n, (st) => (st && st.bg) || ''),
+      fill: common(items.map((item) => item.fill || '')),
+      align: common(items.map((item) => item.align || 'left')),
+    };
+  }
+
+  // 選択中の各アイテムを fn(item) で変更する（1 回の Undo で戻る）
+  decorate(fn) {
+    const ids = this.ids();
+    if (ids.length === 0) return;
+    this.app.commit((doc) => {
+      for (const id of ids) {
+        const item = Model.locate(doc, id).item;
+        fn(item);
+        RichText.assignDecoration(item, item);
+      }
+      return { itemId: ids[0] };
+    }, { itemId: ids[0] });
+  }
+
+  applyStyle(prop, value) {
+    this.decorate((item) => {
+      const styles = RichText.toArray(item.text, item.spans).map((st) => RichText.withProp(st, prop, value));
+      item.spans = RichText.toSpans(styles);
+    });
+  }
+
+  // すべての文字がその装飾を持っていれば解除、そうでなければ設定
+  toggleStyle(prop) {
+    this.applyStyle(prop, this.selectionInfo()[prop] ? null : true);
+  }
+
+  setFill(color) {
+    this.decorate((item) => {
+      item.fill = color || null;
+    });
+  }
+
+  setAlign(align) {
+    this.decorate((item) => {
+      item.align = align;
+    });
+  }
+
+  clearDecoration() {
+    this.decorate((item) => {
+      item.spans = null;
+      item.fill = null;
+      item.align = null;
+    });
+  }
+}

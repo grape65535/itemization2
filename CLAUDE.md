@@ -42,7 +42,7 @@ javascripts/               （index.html での読み込み順）
   treeLayout.js            ツリー配置計算、[+][-] アイコン位置
   renderer.js              メインエリアの CANVAS 描画
   itemEditor.js            文字入力（見えない TEXTAREA で受け CANVAS に描く）・キー操作・入力中の Undo・装飾の適用
-  editToolbar.js           文字入力中の装飾ツールバー（ボタン・ポップアップ）
+  editToolbar.js           装飾ツールバー（ボタン・ポップアップ・ツールチップ）と、選択中アイテムへの装飾の適用（SelectionDecorator）
   mainArea.js              メインエリア（スクロール・ヒットテスト・選択・ドラッグ・範囲選択）
   tabBar.js                タブバー（切替・追加・削除・並べ替え）
   menuBar.js               ヘッダのメニュー

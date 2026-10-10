@@ -428,6 +428,18 @@ class ItemEditor {
     this.decorated();
   }
 
+  // ツールバーで操作できる装飾（文字の装飾・アイテム背景色・寄せ方）をアイテム全体から消す
+  clearDecoration() {
+    if (this.editingId === null) return;
+    const styles = new Array(this.ta.value.length).fill(null);
+    if (this.fill === null && this.align === 'left' && this.styles.every((s) => s === null)) return;
+    this.pushUndo();
+    this.styles = styles;
+    this.fill = null;
+    this.align = 'left';
+    this.decorated();
+  }
+
   decorated() {
     this.lastKind = null;
     this.area.render();

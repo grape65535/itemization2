@@ -112,6 +112,7 @@ class MainArea {
       candidates: this.drag && this.drag.type === 'marquee' ? this.drag.candidates : null,
       drag: this.drag,
     });
+    this.toolbar.syncSelection();
   }
 
   // アイテムが描画範囲外ならスクロールして範囲内に収める
