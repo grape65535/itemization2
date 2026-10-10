@@ -19,6 +19,7 @@ class MenuBar {
           { separator: true },
           { label: '番号付き箇条書きとしてコピー', action: () => app.copyAs('numbered'), enabled: () => app.selectedIds().length > 0 },
           { label: 'マークダウンとしてコピー', action: () => app.copyAs('markdown'), enabled: () => app.selectedIds().length > 0 },
+          { label: 'ツリーとしてコピー', action: () => app.copyAs('tree'), enabled: () => app.selectedIds().length > 0 },
           { label: 'CSVとしてコピー', action: () => app.copyAs('csv'), enabled: () => app.selectedIds().length > 0 },
           { label: 'TSVとしてコピー', action: () => app.copyAs('tsv'), enabled: () => app.selectedIds().length > 0 },
         ],

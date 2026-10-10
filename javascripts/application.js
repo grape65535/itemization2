@@ -307,7 +307,7 @@ class Application {
     }
   }
 
-  // 番号付き箇条書き・マークダウン・CSV・TSV としてコピー（文字列のみ。JSON は書き込まない）
+  // 番号付き箇条書き・マークダウン・ツリー・CSV・TSV としてコピー（文字列のみ。JSON は書き込まない）
   copyAs(format) {
     this.editor.end();
     const ids = this.selectedIds();
@@ -315,7 +315,8 @@ class Application {
     const clips = ItemClipboard.fromSelection(this.index, ids);
     const text = format === 'numbered' ? ItemClipboard.toNumbered(clips)
       : format === 'markdown' ? ItemClipboard.toMarkdown(clips)
-        : ItemClipboard.toDelimited(clips, format === 'tsv' ? '\t' : ',');
+        : format === 'tree' ? ItemClipboard.toTree(clips)
+          : ItemClipboard.toDelimited(clips, format === 'tsv' ? '\t' : ',');
     this.clipboardEventFired = false;
     this.copyTextOverride = text;
     try {

@@ -220,6 +220,30 @@ const ItemClipboard = {
     return out.join('\n');
   },
 
+  // tree コマンドの出力形式（子孫は ├── / └── と │ で表す）。
+  // 最上位のアイテムが 1 つならそれを枝なしの先頭行にし、複数なら最上位のアイテムも枝で表す（区切りが曖昧にならないように）。
+  // 複数行のアイテムの 2 行目以降は、そのアイテムの子と同じ前置きを付ける
+  toTree(clips) {
+    const out = [];
+    const walk = (list, prefix) => {
+      list.forEach((c, i) => {
+        const last = i === list.length - 1;
+        const childPrefix = prefix + (last ? '    ' : '│   ');
+        const lines = c.text.split('\n');
+        out.push(prefix + (last ? '└── ' : '├── ') + lines[0]);
+        for (const line of lines.slice(1)) out.push(childPrefix + line);
+        walk(c.children, childPrefix);
+      });
+    };
+    if (clips.length === 1) {
+      out.push(...clips[0].text.split('\n'));
+      walk(clips[0].children, '');
+    } else {
+      walk(clips, '');
+    }
+    return out.map((line) => line.replace(/ +$/, '')).join('\n');
+  },
+
   // CSV/TSV。ルートから末端までの経路ごとに 1 行（貼り付けの逆）。行ごとに列数は異なってよい
   toDelimited(clips, delimiter) {
     const rows = [];
