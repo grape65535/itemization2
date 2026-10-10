@@ -96,14 +96,14 @@ const TreeLayout = {
     };
   },
 
-  // [+][-] アイコンを表示するか（文字入力中のアイテム、または折り畳み中のアイテム）
-  isToggleVisible(node, editingId) {
-    return node.hasChildren && (node.id === editingId || node.collapsed);
+  // [+][-] アイコンを表示するか（子があれば文字入力・選択状態に関係なく常に表示）
+  isToggleVisible(node) {
+    return node.hasChildren;
   },
 
-  // アイテム外の右端、子への関係線のすぐ上
+  // アイテム外の右端、子への関係線のすぐ上（関係線から 5px 上）
   toggleRect(node) {
     const s = Config.toggleSize;
-    return { x: node.x + node.w + 3, y: node.y + node.h / 2 - s - 2, w: s, h: s };
+    return { x: node.x + node.w + 3, y: node.y + node.h / 2 - s - 5, w: s, h: s };
   },
 };

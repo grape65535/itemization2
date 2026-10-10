@@ -148,7 +148,7 @@ class MainArea {
     const b = Config.borderHitWidth;
     for (let i = order.length - 1; i >= 0; i--) {
       const n = order[i];
-      if (TreeLayout.isToggleVisible(n, this.editor.editingId)) {
+      if (TreeLayout.isToggleVisible(n)) {
         const t = TreeLayout.toggleRect(n);
         if (p.x >= t.x - 2 && p.x <= t.x + t.w + 2 && p.y >= t.y - 2 && p.y <= t.y + t.h + 2) return { type: 'toggle', id: n.id };
       }

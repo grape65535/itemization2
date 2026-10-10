@@ -54,7 +54,7 @@ const Renderer = {
     for (const node of layout.order) {
       if (!visible(node.x - 2, node.y - 2, node.w + C.toggleSize + 8, node.h + 4)) continue;
       Renderer.drawItem(ctx, node, state);
-      if (TreeLayout.isToggleVisible(node, state.editingId)) Renderer.drawToggle(ctx, node);
+      if (TreeLayout.isToggleVisible(node)) Renderer.drawToggle(ctx, node);
     }
 
     const drag = state.drag;
