@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.0.1',
+  version: 'v2.0.2',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',
@@ -23,7 +23,7 @@ const Config = {
   minContentWidth: 24,
   maxContentWidth: 360, // 「設定で変更可能な最大横幅」（設定 UI は未実装）
   cornerRadius: 6,
-  borderHitWidth: 3, // 枠線クリックとみなす内側の幅(px)
+  borderHitWidth: 3, // 枠線の両側この幅(px)以内のクリックは枠線クリックとみなす
 
   // ツリー配置
   margin: 24,

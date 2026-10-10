@@ -152,8 +152,9 @@ class MainArea {
         const t = TreeLayout.toggleRect(n);
         if (p.x >= t.x - 2 && p.x <= t.x + t.w + 2 && p.y >= t.y - 2 && p.y <= t.y + t.h + 2) return { type: 'toggle', id: n.id };
       }
-      if (p.x >= n.x - 2 && p.x <= n.x + n.w + 2 && p.y >= n.y - 2 && p.y <= n.y + n.h + 2) {
-        const inner = p.x >= n.x + b && p.x <= n.x + n.w - b && p.y >= n.y + b && p.y <= n.y + n.h - b;
+      // 枠線（1px）とその両側 b px を「枠」とみなす
+      if (p.x >= n.x - b && p.x < n.x + n.w + b && p.y >= n.y - b && p.y < n.y + n.h + b) {
+        const inner = p.x >= n.x + 1 + b && p.x < n.x + n.w - 1 - b && p.y >= n.y + 1 + b && p.y < n.y + n.h - 1 - b;
         return { type: 'item', id: n.id, part: inner ? 'inner' : 'border' };
       }
     }
