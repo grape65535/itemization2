@@ -109,6 +109,79 @@ const ItemClipboard = {
     return out.join('\n');
   },
 
+  // CSV/TSV として解釈できればクリップ形式（各行を「1 列目 → 2 列目 → …」の親子の連なりにし、行同士は兄弟）を返す。
+  // 条件: 2 行以上、全行の列数が一致し 2 列以上、改行を含む値は要素全体が "" で囲われている（TSV を優先して試す）
+  parseTable(text) {
+    for (const delimiter of ['\t', ',']) {
+      const rows = ItemClipboard.parseDelimited(text, delimiter);
+      if (!rows || rows.length < 2) continue;
+      const columns = rows[0].length;
+      if (columns < 2 || rows.some((r) => r.length !== columns)) continue;
+      return rows.map((row) => {
+        // 空のセルは飛ばして次の列をその子にする
+        const cells = row.filter((cell) => cell !== '');
+        let top = null;
+        let parent = null;
+        for (const cell of cells) {
+          const node = { text: cell, children: [] };
+          if (parent) parent.children.push(node);
+          else top = node;
+          parent = node;
+        }
+        return top;
+      }).filter(Boolean);
+    }
+    return null;
+  },
+
+  // 区切り文字で分割した行の配列。区切り前後の空白は除く。"..." 内の区切り・改行・"" は値の一部。
+  // 不正な形式（閉じられていない "、" の後ろに余計な文字）なら null。空行は無視する
+  parseDelimited(text, delimiter) {
+    const isSpace = (ch) => (ch === ' ' || ch === '\t' || ch === '\u3000') && ch !== delimiter;
+    const rows = [];
+    let row = [];
+    let i = 0;
+    const n = text.length;
+    const endRow = () => {
+      if (!(row.length === 1 && row[0] === '')) rows.push(row);
+      row = [];
+    };
+    while (i <= n) {
+      while (i < n && isSpace(text[i])) i++;
+      let value = '';
+      if (text[i] === '"') {
+        i++;
+        for (;;) {
+          if (i >= n) return null;
+          if (text[i] === '"') {
+            if (text[i + 1] === '"') {
+              value += '"';
+              i += 2;
+              continue;
+            }
+            i++;
+            break;
+          }
+          value += text[i++];
+        }
+        while (i < n && isSpace(text[i])) i++;
+        if (i < n && text[i] !== delimiter && text[i] !== '\n') return null;
+      } else {
+        const start = i;
+        while (i < n && text[i] !== delimiter && text[i] !== '\n') i++;
+        value = text.slice(start, i).replace(/[ \t\u3000]+$/, '');
+      }
+      row.push(value);
+      if (i >= n) {
+        endRow();
+        break;
+      }
+      if (text[i] === '\n') endRow();
+      i++;
+    }
+    return rows;
+  },
+
   indentWidth(s) {
     let w = 0;
     for (const ch of s) w += ch === '\t' ? 4 : ch === '　' ? 2 : 1;
@@ -121,7 +194,13 @@ const ItemClipboard = {
   //  - 罫線ツリー（├ └ など）・番号付き（1. / 1 / 1.2 / 1-2 / 1-a. / (1) / (A)）の行も記号付きの行と同様に扱う
   //  - 親子関係はインデント量で決め、同じインデントでは # 見出し ＞ その他、記号の連続数（- -- / # ## / 1 1.2）が多いほど深い
   parseText(text) {
-    const lines = text.replace(/\r\n?/g, '\n').split('\n');
+    text = text.replace(/\r\n?/g, '\n');
+    const lines = text.split('\n');
+    // 行頭の記号（箇条書き・番号・罫線）が無ければ、CSV/TSV として解釈できるか試す
+    if (!lines.some((line) => ItemClipboard.matchItemLine(line))) {
+      const table = ItemClipboard.parseTable(text);
+      if (table) return table;
+    }
     const roots = [];
     const stack = []; // { key: [indent, rank, run], node }
     let current = null;
