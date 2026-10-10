@@ -9,6 +9,32 @@ const ItemClipboard = {
 
   // 行頭の箇条書き記号。- # * は連続可（連続数だけ深い階層）
   LINE_PATTERN: /^([ \t　]*)(?:(-+|#+|\*+)|([・･•○●×→▲▶▼◀△▷▽◁])[︎️]?)[ \t　]*(.*)$/,
+  // 罫線ツリー（├── / └ / ┣━ / ASCII の |-- `-- +-- など）。前置きの │ と空白がインデント
+  TREE_PATTERN: /^([ \t　│┃║|]*?)(?:[├└┣┗┠┖┝┕╠╚╟╙]|[|`+](?=-))[─━═\-]*[ \t　]*(.*)$/,
+  TREE_RULE: /^[ \t　│┃║|]*/,
+  // 番号付き（1. / 1.text / 1 text / 1.2.3 text、全角数字も可）。区切りの数が多いほど深い階層
+  NUMBER_PATTERN: /^([ \t　]*)([0-9０-９]+(?:[.．][0-9０-９]+)*)(?:[.．][ \t　]*|[ \t　]+)(.*)$/,
+
+  // 行がアイテムの始まりなら { key: [indent, rank, run], body, tree } を返す
+  matchItemLine(line) {
+    let m = line.match(ItemClipboard.TREE_PATTERN);
+    if (m) {
+      // 分岐記号の位置より左から始まるアイテムの子になるよう +1
+      return { key: [ItemClipboard.indentWidth(m[1]) + 1, 1, 1], body: m[2], tree: true };
+    }
+    m = line.match(ItemClipboard.LINE_PATTERN);
+    if (m) {
+      const run = m[2] ? m[2].length : 1;
+      const rank = m[2] && m[2][0] === '#' ? 0 : 1;
+      return { key: [ItemClipboard.indentWidth(m[1]), rank, run], body: m[4], tree: false };
+    }
+    m = line.match(ItemClipboard.NUMBER_PATTERN);
+    if (m) {
+      const run = m[2].split(/[.．]/).length;
+      return { key: [ItemClipboard.indentWidth(m[1]), 1, run], body: m[3], tree: false };
+    }
+    return null;
+  },
 
   // 文書のアイテムからクリップ形式を作る。
   // ids（文書順）のうち、選択された最も近い祖先の子として並べることで、選択アイテム間の親子関係を維持する
@@ -83,13 +109,15 @@ const ItemClipboard = {
   // プレーンテキストを箇条書きとして解釈してクリップ形式にする
   //  - 行頭（インデント後）に記号がある行は新しいアイテム。後続の記号なしの行は改行を含めてそのアイテムの文字列（行頭の空白は除去）
   //  - 記号なしで始まるアイテムは、インデント量が変わった行で新しいアイテムに区切る
-  //  - 親子関係はインデント量で決め、同じインデントでは # 見出し ＞ その他、記号の連続数（- -- / # ##）が多いほど深い
+  //  - 罫線ツリー（├ └ など）・番号付き（1. / 1 / 1.2）の行も記号付きの行と同様に扱う
+  //  - 親子関係はインデント量で決め、同じインデントでは # 見出し ＞ その他、記号の連続数（- -- / # ## / 1 1.2）が多いほど深い
   parseText(text) {
     const lines = text.replace(/\r\n?/g, '\n').split('\n');
     const roots = [];
     const stack = []; // { key: [indent, rank, run], node }
     let current = null;
     let currentHasSymbol = false;
+    let currentIsTree = false;
     let lastIndent = 0;
     const less = (a, b) => (a[0] !== b[0] ? a[0] < b[0] : a[1] !== b[1] ? a[1] < b[1] : a[2] < b[2]);
     const add = (key, body) => {
@@ -102,14 +130,17 @@ const ItemClipboard = {
 
     for (const raw of lines) {
       const line = raw.replace(/[ \t　]+$/, '');
-      const m = line.match(ItemClipboard.LINE_PATTERN);
-      if (m) {
-        const indent = ItemClipboard.indentWidth(m[1]);
-        const run = m[2] ? m[2].length : 1;
-        const rank = m[2] && m[2][0] === '#' ? 0 : 1;
-        add([indent, rank, run], m[4]);
+      const item = ItemClipboard.matchItemLine(line);
+      if (item) {
+        add(item.key, item.body);
         currentHasSymbol = true;
-        lastIndent = indent;
+        currentIsTree = item.tree;
+        lastIndent = item.key[0];
+        continue;
+      }
+      // 罫線ツリーの続きの行は、前置きの縦線も除く（縦線だけの行は空行）
+      if (current && currentIsTree) {
+        current.text += '\n' + line.replace(ItemClipboard.TREE_RULE, '');
         continue;
       }
       if (line === '') {
@@ -124,6 +155,7 @@ const ItemClipboard = {
       } else {
         add([indent, 1, 1], body);
         currentHasSymbol = false;
+        currentIsTree = false;
       }
       lastIndent = indent;
     }
