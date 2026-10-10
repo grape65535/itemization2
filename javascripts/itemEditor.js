@@ -165,7 +165,7 @@ class ItemEditor {
         this.start(node.parentId, { line: lineIndex, pos: 'end' });
         return;
       case 'ArrowRight':
-        if (start !== line.start || node.children.length === 0) return;
+        if (start !== line.end || node.children.length === 0) return;
         e.preventDefault();
         this.start(node.children[0].id, { line: lineIndex, pos: 'start' });
         return;
