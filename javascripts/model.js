@@ -3,7 +3,7 @@
 // 保存データ（JSON）のツリー操作
 //   Document = { format, tabs: [Tab] }
 //   Tab      = { id, name?, root: Item }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
-//   Item     = { id, text, collapsed, children: [Item] }
+//   Item     = { id, text, collapsed, children: [Item], spans?, fill?, align? }（装飾は richText.js を参照）
 const Model = {
   FORMAT: 1,
 
@@ -30,12 +30,12 @@ const Model = {
     };
     const fixItem = (item) => {
       if (!item || typeof item !== 'object') return Model.createItem();
-      return {
+      return RichText.assignDecoration({
         id: uniqueId(item.id),
         text: typeof item.text === 'string' ? item.text : '',
         collapsed: !!item.collapsed,
         children: Array.isArray(item.children) ? item.children.map(fixItem) : [],
-      };
+      }, item);
     };
     return {
       format: Model.FORMAT,

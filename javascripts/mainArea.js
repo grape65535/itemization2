@@ -8,23 +8,27 @@ class MainArea {
     this.canvas = Util.el('canvas', 'main-canvas');
     this.scroller = Util.el('div', 'main-scroller');
     this.spacer = Util.el('div', 'main-spacer');
+    // 文字入力を受ける見えない TEXTAREA（文字・カーソルは CANVAS に描く）。IME の候補窓のためカーソル位置に置く
     const textarea = Util.el('textarea', 'item-editor');
     textarea.spellcheck = false;
-    textarea.setAttribute('wrap', 'soft');
+    textarea.setAttribute('wrap', 'off');
     textarea.style.font = Config.font;
-    textarea.style.lineHeight = Config.lineHeight + 'px';
     this.scroller.append(this.spacer, textarea);
     container.append(this.canvas, this.scroller);
     this.ctx = this.canvas.getContext('2d');
 
-    this.measurer = new TextMeasurer(Config.font);
+    this.measurer = new TextMeasurer();
     this.editor = new ItemEditor(this, textarea);
+    this.toolbar = new EditToolbar(this, this.scroller);
     this.layout = null;
     this.drag = null;
     this.renderedTabId = null;
     this.scrollPositions = new Map();
 
-    this.scroller.addEventListener('scroll', () => this.draw());
+    this.scroller.addEventListener('scroll', () => {
+      this.positionEditor();
+      this.draw();
+    });
     this.scroller.addEventListener('mousedown', (e) => this.onMouseDown(e));
     this.scroller.addEventListener('mousemove', (e) => this.updateCursor(e));
     window.addEventListener('mousemove', (e) => this.onMouseMove(e));
@@ -55,8 +59,7 @@ class MainArea {
         this.scrollPositions.set(this.renderedTabId, { x: this.scroller.scrollLeft, y: this.scroller.scrollTop });
       }
     }
-    const editingId = this.editor.editingId;
-    const override = editingId !== null ? { id: editingId, text: this.editor.text } : null;
+    const override = this.editor.isEditing ? this.editor.override : null;
     this.layout = TreeLayout.compute(tab.root, this.measurer, override);
     this.spacer.style.width = this.layout.width + 'px';
     this.spacer.style.height = this.layout.height + 'px';
@@ -70,18 +73,21 @@ class MainArea {
     this.draw();
   }
 
+  // 見えない TEXTAREA をカーソル位置に、ツールバーをアイテムの上（隠れる場合は下）に置く
   positionEditor() {
     const ta = this.editor.ta;
-    const node = this.editor.editingId !== null ? this.layout.nodes.get(this.editor.editingId) : null;
+    const node = this.editor.node;
     if (!node) {
       ta.style.display = 'none';
+      this.toolbar.hide();
       return;
     }
+    const caret = this.editor.caretRect(this.editor.anchorFocus()[1]);
     ta.style.display = 'block';
-    ta.style.left = node.x + Config.paddingX + 'px';
-    ta.style.top = node.y + Config.paddingY + 'px';
-    ta.style.width = node.contentWidth + 2 + 'px';
-    ta.style.height = node.lines.length * Config.lineHeight + 'px';
+    ta.style.left = caret.x + 'px';
+    ta.style.top = caret.y + 'px';
+    ta.style.height = caret.h + 'px';
+    this.toolbar.show(node);
   }
 
   draw() {
@@ -101,7 +107,7 @@ class MainArea {
       scrollY: this.scroller.scrollTop,
       viewWidth: w,
       viewHeight: h,
-      editingId: this.editor.editingId,
+      editing: this.editor.drawState(),
       selection: this.app.selection,
       candidates: this.drag && this.drag.type === 'marquee' ? this.drag.candidates : null,
       drag: this.drag,
@@ -163,8 +169,8 @@ class MainArea {
 
   caretAt(id, p) {
     const node = this.layout.nodes.get(id);
-    const index = Util.clamp(Math.floor((p.y - node.y - Config.paddingY) / Config.lineHeight), 0, node.lines.length - 1);
-    return this.measurer.offsetAt(node.text, node.lines[index], p.x - node.x - Config.paddingX);
+    const line = node.lines[TreeLayout.lineIndexAtY(node, p.y - node.y - Config.paddingY)];
+    return this.measurer.offsetAt(node.text, node.styles, line, p.x - node.x - Config.paddingX - line.x);
   }
 
   updateCursor(e) {
@@ -176,11 +182,12 @@ class MainArea {
   // ---- マウス操作 ----
 
   onMouseDown(e) {
-    if (e.button !== 0 || e.target === this.editor.ta) return;
+    if (e.button !== 0 || e.target === this.editor.ta || this.toolbar.el.contains(e.target)) return;
     const r = this.scroller.getBoundingClientRect();
     if (e.clientX - r.left >= this.scroller.clientWidth || e.clientY - r.top >= this.scroller.clientHeight) return; // スクロールバー
     e.preventDefault();
     this.app.menuBar.closeAll();
+    this.toolbar.closePopup();
     const p = this.toContent(e);
     const hit = this.hitTest(p);
     const modifier = e.shiftKey || e.ctrlKey || e.metaKey;
@@ -189,10 +196,20 @@ class MainArea {
       this.app.toggleCollapse(hit.id);
       return;
     }
-    if (hit && !modifier && hit.part === 'inner' && hit.id === this.editor.editingId) {
+    // 文字入力中のアイテム内：クリックでカーソル移動、ドラッグ・SHIFT+クリックで範囲選択、ダブル／トリプルクリックで単語／段落を選択
+    if (hit && hit.part === 'inner' && hit.id === this.editor.editingId) {
+      const editor = this.editor;
       const offset = this.caretAt(hit.id, p);
-      this.editor.ta.focus({ preventScroll: true });
-      this.editor.ta.setSelectionRange(offset, offset);
+      editor.ta.focus({ preventScroll: true });
+      if (e.detail === 2) {
+        editor.selectWord(offset);
+      } else if (e.detail >= 3) {
+        editor.selectParagraph(offset);
+      } else {
+        const anchor = e.shiftKey ? editor.anchorFocus()[0] : offset;
+        editor.setSelection(anchor, offset);
+        this.drag = { type: 'text', id: hit.id, anchor };
+      }
       return;
     }
     this.editor.end();
@@ -245,6 +262,11 @@ class MainArea {
         d.current = this.toContent(e);
         this.updateMarquee();
         this.draw();
+        break;
+      case 'text':
+        if (this.editor.editingId !== d.id) break;
+        this.autoScroll(e);
+        this.editor.setSelection(d.anchor, this.caretAt(d.id, this.toContent(e)));
         break;
     }
   }

@@ -246,24 +246,174 @@ body.tab-dragging * {
   pointer-events: none;
 }
 
-/* CANVAS の折り返し計算（文字単位）と揃える */
+/* 文字入力を受ける見えない TEXTAREA（文字・選択範囲・カーソルは CANVAS に描く）。IME の候補窓のためカーソル位置に置く */
 .item-editor {
   display: none;
   position: absolute;
   z-index: 1;
   box-sizing: content-box;
+  width: 1px;
   margin: 0;
   padding: 0;
   border: 0;
   outline: none;
   resize: none;
   overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
   background: transparent;
-  color: #000;
-  white-space: break-spaces;
-  word-break: break-all;
-  overflow-wrap: anywhere;
-  line-break: anywhere;
+  color: transparent;
+  caret-color: transparent;
+  white-space: pre;
+}
+
+/* ---- 文字入力中のツールバー ---- */
+.edit-toolbar {
+  position: absolute;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  height: 30px;
+  box-sizing: border-box;
+  padding: 2px 4px;
+  background: #fff;
+  border: 1px solid #b8c0ca;
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.16);
+  white-space: nowrap;
+  user-select: none;
+  cursor: default;
+}
+
+.edit-toolbar-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: #2f3a4a;
+  --swatch: transparent;
+  cursor: pointer;
+}
+
+.edit-toolbar-button:hover:not(.disabled),
+.edit-toolbar-button.open {
+  background: #e6efff;
+}
+
+.edit-toolbar-button.active {
+  background: #cfe0ff;
+  color: #1e64f0;
+}
+
+.edit-toolbar-button.disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.edit-toolbar-separator {
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: #dde2e8;
+}
+
+.edit-toolbar-popup {
+  position: absolute;
+  top: calc(100% + 4px);
+  padding: 6px;
+  background: #fff;
+  border: 1px solid #c4cad2;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+}
+
+.size-list {
+  display: flex;
+  flex-direction: column;
+  padding: 4px 0;
+}
+
+.size-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 3px 12px;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.size-option:hover {
+  background: #e6efff;
+}
+
+.size-option.current {
+  background: #cfe0ff;
+}
+
+.size-sample {
+  min-width: 48px;
+  font-family: Consolas, "Courier New", "BIZ UDGothic", "MS Gothic", "Osaka-Mono", monospace;
+  line-height: 1.3;
+}
+
+.size-label {
+  color: #666;
+  font-size: 12px;
+}
+
+.color-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 22px);
+  gap: 4px;
+}
+
+.color-swatch {
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.25);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.color-swatch:hover {
+  outline: 2px solid #8fb2f5;
+}
+
+.color-swatch.current {
+  outline: 2px solid #1e64f0;
+  outline-offset: 1px;
+}
+
+.color-none {
+  display: block;
+  width: 100%;
+  margin-top: 6px;
+  padding: 3px 4px;
+  border: 1px solid #c4cad2;
+  border-radius: 3px;
+  background: #fff;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.color-none:hover {
+  background: #e6efff;
+}
+
+.color-none.current {
+  border-color: #1e64f0;
 }
 
 .tab-title-input {

@@ -72,14 +72,12 @@ const FileExport = {
       for (const child of node.children) {
         connectors.push({ x1: node.x + node.w, y1: node.y + node.h / 2, x2: child.x, y2: child.y + child.h / 2 });
       }
-      items.push({
-        x: node.x,
-        y: node.y,
-        w: node.w,
-        h: node.h,
-        contentWidth: node.contentWidth,
-        lines: node.lines.map((l) => node.text.slice(l.start, l.end)),
+      // 文字は装飾の同じ区間ごと（座標はコンテンツ座標、y はベースライン）
+      const segments = [];
+      Renderer.eachSegment(node, (seg, x, baseline) => {
+        segments.push({ text: node.text.slice(seg.start, seg.end), x, y: baseline, width: seg.width, style: seg.style });
       });
+      items.push({ x: node.x, y: node.y, w: node.w, h: node.h, fill: node.fill, segments });
     }
     return { width: Math.ceil(layout.width), height: Math.ceil(layout.height), connectors, items };
   },
@@ -94,11 +92,6 @@ const FileExport = {
     return `M ${x + r} ${y} L ${x + w - r} ${y} Q ${x + w} ${y} ${x + w} ${y + r} L ${x + w} ${y + h - r} ` +
       `Q ${x + w} ${y + h} ${x + w - r} ${y + h} L ${x + r} ${y + h} Q ${x} ${y + h} ${x} ${y + h - r} ` +
       `L ${x} ${y + r} Q ${x} ${y} ${x + r} ${y} Z`;
-  },
-
-  // 文字のベースライン（行の縦中央に合わせる）
-  baselineY(item, lineIndex) {
-    return item.y + Config.paddingY + lineIndex * Config.lineHeight + Config.lineHeight / 2 + Config.fontSize * 0.35;
   },
 
   // ---- SVG ----
@@ -121,10 +114,31 @@ const FileExport = {
     out.push(`<g font-family="${esc(C.fontFamily)}" font-size="${C.fontSize}" fill="${col.text}" xml:space="preserve">`);
     for (const it of scene.items) {
       out.push(`<rect x="${it.x + 0.5}" y="${it.y + 0.5}" width="${it.w - 1}" height="${it.h - 1}" rx="${C.cornerRadius}" ` +
-        `fill="${col.itemFill}" stroke="${col.itemBorder}" stroke-width="1"/>`);
-      it.lines.forEach((line, i) => {
-        if (line) out.push(`<text x="${it.x + C.paddingX}" y="${FileExport.baselineY(it, i)}">${esc(line)}</text>`);
-      });
+        `fill="${it.fill || col.itemFill}" stroke="${col.itemBorder}" stroke-width="1"/>`);
+      // 文字背景 → 文字 → 下線・取消し線（CANVAS と同じ順・位置）
+      for (const seg of it.segments) {
+        if (!seg.style || !seg.style.bg) continue;
+        const d = RichText.decoration(seg.style, seg.y);
+        out.push(`<rect x="${seg.x}" y="${d.bgTop}" width="${seg.width}" height="${d.bgHeight}" fill="${seg.style.bg}"/>`);
+      }
+      for (const seg of it.segments) {
+        const st = seg.style;
+        if (seg.text.trim()) {
+          const attrs = [`x="${seg.x}"`, `y="${seg.y}"`];
+          if (st && st.size) attrs.push(`font-size="${st.size}"`);
+          if (st && st.bold) attrs.push('font-weight="bold"');
+          if (st && st.color) attrs.push(`fill="${st.color}"`);
+          // 字幅が違う環境でも区間の幅に収める
+          attrs.push(`textLength="${seg.width}"`, 'lengthAdjust="spacingAndGlyphs"');
+          out.push(`<text ${attrs.join(' ')}>${esc(seg.text)}</text>`);
+        }
+        if (st && (st.underline || st.strike)) {
+          const d = RichText.decoration(st, seg.y);
+          const color = st.color || col.text;
+          if (st.underline) out.push(`<rect x="${seg.x}" y="${Math.round(d.underlineY)}" width="${seg.width}" height="${d.thickness}" fill="${color}"/>`);
+          if (st.strike) out.push(`<rect x="${seg.x}" y="${Math.round(d.strikeY)}" width="${seg.width}" height="${d.thickness}" fill="${color}"/>`);
+        }
+      }
     }
     out.push('</g>');
     out.push('</svg>');
@@ -188,16 +202,34 @@ const FileExport = {
     }
     for (const it of scene.items) {
       page.drawSvgPath(FileExport.roundRectPath(it.x + 0.5, it.y + 0.5, it.w - 1, it.h - 1, C.cornerRadius),
-        Object.assign({ color: hex(col.itemFill), borderColor: hex(col.itemBorder), borderWidth: k }, svgOpts));
-      it.lines.forEach((line, i) => {
-        if (!line) return;
-        let size = C.fontSize * k;
-        // 画面のフォントと字幅が違っても枠からはみ出さないよう、必要なら文字を縮める
-        const maxWidth = it.contentWidth * k;
-        const width = font.widthOfTextAtSize(line, size);
-        if (width > maxWidth) size *= maxWidth / width;
-        page.drawText(line, { x: (it.x + C.paddingX) * k, y: (H - FileExport.baselineY(it, i)) * k, size, font, color: hex(col.text) });
-      });
+        Object.assign({ color: hex(it.fill || col.itemFill), borderColor: hex(col.itemBorder), borderWidth: k }, svgOpts));
+      // 矩形（コンテンツ座標）を PDF の座標で塗る
+      const fillRect = (x, y, w, h, color) => page.drawRectangle({ x: x * k, y: (H - y - h) * k, width: w * k, height: h * k, color: hex(color) });
+      for (const seg of it.segments) {
+        if (!seg.style || !seg.style.bg) continue;
+        const d = RichText.decoration(seg.style, seg.y);
+        fillRect(seg.x, d.bgTop, seg.width, d.bgHeight, seg.style.bg);
+      }
+      for (const seg of it.segments) {
+        const st = seg.style;
+        const color = (st && st.color) || col.text;
+        if (seg.text.trim()) {
+          let size = RichText.sizeOf(st) * k;
+          // 画面のフォントと字幅が違っても区間の幅からはみ出さないよう、必要なら文字を縮める
+          const maxWidth = seg.width * k;
+          const width = font.widthOfTextAtSize(seg.text, size);
+          if (width > maxWidth) size *= maxWidth / width;
+          const opts = { x: seg.x * k, y: (H - seg.y) * k, size, font, color: hex(color) };
+          page.drawText(seg.text, opts);
+          // 埋め込みフォントに太字が無いため、少しずらして重ね描きする
+          if (st && st.bold) page.drawText(seg.text, Object.assign({}, opts, { x: opts.x + size * 0.04 }));
+        }
+        if (st && (st.underline || st.strike)) {
+          const d = RichText.decoration(st, seg.y);
+          if (st.underline) fillRect(seg.x, Math.round(d.underlineY), seg.width, d.thickness, color);
+          if (st.strike) fillRect(seg.x, Math.round(d.strikeY), seg.width, d.thickness, color);
+        }
+      }
     }
     return pdf.save();
   },

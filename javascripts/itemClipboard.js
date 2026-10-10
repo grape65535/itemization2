@@ -1,7 +1,7 @@
 'use strict';
 
 // コピー/貼り付け用のアイテム形式の変換。
-// クリップ形式 = [{ text, children: [クリップ形式] }]（ID を持たない木）
+// クリップ形式 = [{ text, children: [クリップ形式], spans?, fill?, align? }]（ID を持たない木。装飾は JSON 形式でのみ保持）
 const ItemClipboard = {
   MIME: 'application/x-itemization+json',
   BULLET: '・',
@@ -52,7 +52,8 @@ const ItemClipboard = {
     const nodes = new Map();
     const roots = [];
     for (const id of ids) {
-      const node = { text: index.get(id).item.text, children: [] };
+      const item = index.get(id).item;
+      const node = RichText.assignDecoration({ text: item.text, children: [] }, item);
       nodes.set(id, node);
       let parent = null;
       for (let e = index.get(id); e && e.parent; e = index.get(e.parent.id)) {
@@ -74,10 +75,10 @@ const ItemClipboard = {
     try {
       const data = JSON.parse(json);
       if (!data || data.format !== 'itemization-clip' || !Array.isArray(data.items)) return null;
-      const fix = (c) => ({
+      const fix = (c) => RichText.assignDecoration({
         text: c && typeof c.text === 'string' ? c.text : '',
         children: c && Array.isArray(c.children) ? c.children.map(fix) : [],
-      });
+      }, c);
       return data.items.map(fix);
     } catch (e) {
       return null;
@@ -87,7 +88,7 @@ const ItemClipboard = {
   // クリップ形式 → 文書のアイテム（新しい ID を振る）
   toItems(clips) {
     return clips.map((c) => {
-      const item = Model.createItem(c.text);
+      const item = RichText.assignDecoration(Model.createItem(c.text), c);
       item.children = ItemClipboard.toItems(c.children);
       return item;
     });
