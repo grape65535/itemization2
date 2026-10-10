@@ -12,10 +12,11 @@ const ItemClipboard = {
   // 罫線ツリー（├── / └ / ┣━ / ASCII の |-- `-- +-- など）。前置きの │ と空白がインデント
   TREE_PATTERN: /^([ \t　│┃║|]*?)(?:[├└┣┗┠┖┝┕╠╚╟╙]|[|`+](?=-))[─━═\-]*[ \t　]*(.*)$/,
   TREE_RULE: /^[ \t　│┃║|]*/,
-  // 番号付き（1. / 1.text / 1 text / 1.2 text / 1-2 text / 1.2.text / 1-2.text、全角も可）。末尾が . なら後の空白は任意、. が無ければ空白必須。区切りの数が多いほど深い階層
-  NUMBER_PATTERN: /^([ \t　]*)([0-9０-９]+(?:[.．\-－][0-9０-９]+)*)(?:[.．](?![0-9０-９])[ \t　]*|[ \t　]+)(.*)$/,
-  // 括弧で囲った番号付き（(1) text / （１） text）。後の空白は必須
-  PAREN_NUMBER_PATTERN: /^([ \t　]*)[(（][0-9０-９]+[)）][ \t　]+(.*)$/,
+  // 番号付き（1. / 1.text / 1 text / 1.2 text / 1-a. / B-C text / D.e. など、各区切りは数字か英字 1 文字、全角も可）。
+  // 末尾が . なら後の空白は任意、. が無ければ空白必須。区切りの数が多いほど深い階層
+  NUMBER_PATTERN: /^([ \t　]*)((?:[0-9０-９]+|[A-Za-zＡ-Ｚａ-ｚ])(?:[.．\-－](?:[0-9０-９]+|[A-Za-zＡ-Ｚａ-ｚ]))*)(?:([.．])(?![0-9０-９])[ \t　]*|[ \t　]+)(.*)$/,
+  // 括弧で囲った番号付き（(1) text / (A) text / （１） text）。後の空白は必須
+  PAREN_NUMBER_PATTERN: /^([ \t　]*)[(（](?:[0-9０-９]+|[A-Za-zＡ-Ｚａ-ｚ])[)）][ \t　]+(.*)$/,
 
   // 行がアイテムの始まりなら { key: [indent, rank, run], body, tree } を返す
   matchItemLine(line) {
@@ -32,8 +33,12 @@ const ItemClipboard = {
     }
     m = line.match(ItemClipboard.NUMBER_PATTERN);
     if (m) {
-      const run = m[2].split(/[.．\-－]/).length;
-      return { key: [ItemClipboard.indentWidth(m[1]), 1, run], body: m[3], tree: false };
+      const segments = m[2].split(/[.．\-－]/);
+      // 英字 1 文字＋空白だけ（"A text" / "I think"）は英文と区別できないため番号付きにしない
+      const letterOnly = segments.length === 1 && !/[0-9０-９]/.test(segments[0]);
+      if (!(letterOnly && !m[3])) {
+        return { key: [ItemClipboard.indentWidth(m[1]), 1, segments.length], body: m[4], tree: false };
+      }
     }
     m = line.match(ItemClipboard.PAREN_NUMBER_PATTERN);
     if (m) return { key: [ItemClipboard.indentWidth(m[1]), 1, 1], body: m[2], tree: false };
@@ -113,7 +118,7 @@ const ItemClipboard = {
   // プレーンテキストを箇条書きとして解釈してクリップ形式にする
   //  - 行頭（インデント後）に記号がある行は新しいアイテム。後続の記号なしの行は改行を含めてそのアイテムの文字列（行頭の空白は除去）
   //  - 記号なしで始まるアイテムは、インデント量が変わった行で新しいアイテムに区切る
-  //  - 罫線ツリー（├ └ など）・番号付き（1. / 1 / 1.2 / 1-2 / (1)）の行も記号付きの行と同様に扱う
+  //  - 罫線ツリー（├ └ など）・番号付き（1. / 1 / 1.2 / 1-2 / 1-a. / (1) / (A)）の行も記号付きの行と同様に扱う
   //  - 親子関係はインデント量で決め、同じインデントでは # 見出し ＞ その他、記号の連続数（- -- / # ## / 1 1.2）が多いほど深い
   parseText(text) {
     const lines = text.replace(/\r\n?/g, '\n').split('\n');
