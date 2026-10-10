@@ -63,12 +63,11 @@ const FileExport = {
 
   // ---- 描画内容 ----
 
-  // 画面と同じ配置（折り畳み状態を含む）から、SVG/PDF に描く図形を作る
+  // 画面と同じ配置（折り畳み状態を含む）から、SVG/PDF に描く図形を作る（[+][-] アイコンは描かない）
   scene(layout) {
     const C = Config;
     const connectors = [];
     const items = [];
-    const toggles = [];
     for (const node of layout.order) {
       for (const child of node.children) {
         connectors.push({ x1: node.x + node.w, y1: node.y + node.h / 2, x2: child.x, y2: child.y + child.h / 2 });
@@ -81,9 +80,8 @@ const FileExport = {
         contentWidth: node.contentWidth,
         lines: node.lines.map((l) => node.text.slice(l.start, l.end)),
       });
-      if (TreeLayout.isToggleVisible(node)) toggles.push(Object.assign({ collapsed: node.collapsed }, TreeLayout.toggleRect(node)));
     }
-    return { width: Math.ceil(layout.width), height: Math.ceil(layout.height), connectors, items, toggles };
+    return { width: Math.ceil(layout.width), height: Math.ceil(layout.height), connectors, items };
   },
 
   connectorPath(c) {
@@ -96,14 +94,6 @@ const FileExport = {
     return `M ${x + r} ${y} L ${x + w - r} ${y} Q ${x + w} ${y} ${x + w} ${y + r} L ${x + w} ${y + h - r} ` +
       `Q ${x + w} ${y + h} ${x + w - r} ${y + h} L ${x + r} ${y + h} Q ${x} ${y + h} ${x} ${y + h - r} ` +
       `L ${x} ${y + r} Q ${x} ${y} ${x + r} ${y} Z`;
-  },
-
-  togglePaths(t) {
-    const cy = t.y + t.h / 2;
-    const cx = t.x + t.w / 2;
-    let d = `M ${t.x + 3} ${cy} L ${t.x + t.w - 3} ${cy}`;
-    if (t.collapsed) d += ` M ${cx} ${t.y + 3} L ${cx} ${t.y + t.h - 3}`;
-    return { box: `M ${t.x + 0.5} ${t.y + 0.5} h ${t.w - 1} v ${t.h - 1} h ${-(t.w - 1)} Z`, mark: d };
   },
 
   // 文字のベースライン（行の縦中央に合わせる）
@@ -137,11 +127,6 @@ const FileExport = {
       });
     }
     out.push('</g>');
-    for (const t of scene.toggles) {
-      const p = FileExport.togglePaths(t);
-      out.push(`<path d="${p.box}" fill="${col.toggleFill}" stroke="${col.toggleBorder}" stroke-width="1"/>`);
-      out.push(`<path d="${p.mark}" fill="none" stroke="${col.toggleBorder}" stroke-width="1"/>`);
-    }
     out.push('</svg>');
     return out.join('\n');
   },
@@ -213,11 +198,6 @@ const FileExport = {
         if (width > maxWidth) size *= maxWidth / width;
         page.drawText(line, { x: (it.x + C.paddingX) * k, y: (H - FileExport.baselineY(it, i)) * k, size, font, color: hex(col.text) });
       });
-    }
-    for (const t of scene.toggles) {
-      const p = FileExport.togglePaths(t);
-      page.drawSvgPath(p.box, Object.assign({ color: hex(col.toggleFill), borderColor: hex(col.toggleBorder), borderWidth: k }, svgOpts));
-      page.drawSvgPath(p.mark, Object.assign({ borderColor: hex(col.toggleBorder), borderWidth: k }, svgOpts));
     }
     return pdf.save();
   },
