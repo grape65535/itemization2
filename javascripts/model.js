@@ -2,7 +2,7 @@
 
 // 保存データ（JSON）のツリー操作
 //   Document = { format, tabs: [Tab] }
-//   Tab      = { id, root: Item }
+//   Tab      = { id, name?, root: Item }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
 //   Item     = { id, text, collapsed, children: [Item] }
 const Model = {
   FORMAT: 1,
@@ -39,7 +39,11 @@ const Model = {
     };
     return {
       format: Model.FORMAT,
-      tabs: raw.tabs.map((tab) => ({ id: uniqueId(tab && tab.id), root: fixItem(tab && tab.root) })),
+      tabs: raw.tabs.map((tab) => {
+        const fixed = { id: uniqueId(tab && tab.id), root: fixItem(tab && tab.root) };
+        if (tab && typeof tab.name === 'string' && tab.name) fixed.name = tab.name;
+        return fixed;
+      }),
     };
   },
 

@@ -264,3 +264,14 @@ body.tab-dragging * {
   overflow-wrap: anywhere;
   line-break: anywhere;
 }
+
+.tab-title-input {
+  min-width: 2em;
+  margin: 0;
+  padding: 1px 2px;
+  border: 1px solid #1e64f0;
+  border-radius: 3px;
+  outline: none;
+  font: inherit;
+  background: #fff;
+}

@@ -11,6 +11,7 @@ class TabBar {
     container.append(this.list, this.addButton);
     this.drag = null;
     this.renderedActiveId = null;
+    this.rename = null; // タブ名編集中: { id, input }
 
     this.addButton.addEventListener('click', () => this.app.addTab());
     this.list.addEventListener('mousedown', (e) => this.onMouseDown(e));
@@ -25,12 +26,21 @@ class TabBar {
         e.preventDefault();
       }
     }, { passive: false });
+    // タブ名のダブルクリックでその場で編集
+    this.list.addEventListener('dblclick', (e) => {
+      const title = e.target.closest('.tab-title');
+      if (title) this.startRename(title.parentElement.dataset.id);
+    });
+    // 入力欄以外をクリックしたら確定（メインエリアは mousedown を preventDefault するため blur に頼らない）
+    document.addEventListener('mousedown', (e) => {
+      if (this.rename && e.target !== this.rename.input) this.finishRename(true);
+    }, true);
     window.addEventListener('mousemove', (e) => this.onMouseMove(e));
     window.addEventListener('mouseup', (e) => this.onMouseUp(e));
   }
 
   render() {
-    if (this.drag && this.drag.active) return;
+    if ((this.drag && this.drag.active) || this.rename) return;
     const app = this.app;
     this.list.textContent = '';
     for (const tab of app.doc.tabs) {
@@ -50,8 +60,52 @@ class TabBar {
     }
   }
 
+  startRename(id) {
+    const tab = this.app.findTab(id);
+    const tabEl = this.list.querySelector(`.tab[data-id="${id}"]`);
+    if (!tab || !tabEl || this.rename) return;
+    this.app.editor.end();
+    const title = tabEl.querySelector('.tab-title');
+    const input = Util.el('input', 'tab-title-input');
+    input.type = 'text';
+    input.value = this.app.tabTitle(tab);
+    input.spellcheck = false;
+    title.replaceWith(input);
+    this.rename = { id, input };
+    const fit = () => {
+      const ctx = TabBar.measureCtx || (TabBar.measureCtx = document.createElement('canvas').getContext('2d'));
+      ctx.font = getComputedStyle(input).font;
+      input.style.width = Math.ceil(ctx.measureText(input.value).width) + 6 + 'px';
+    };
+    fit();
+    input.addEventListener('input', fit);
+    input.addEventListener('keydown', (e) => {
+      if (e.isComposing || e.keyCode === 229) return;
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.finishRename(true);
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.finishRename(false);
+      }
+    });
+    input.addEventListener('blur', () => this.finishRename(true));
+    input.focus();
+    input.select();
+  }
+
+  // commit=false（ESC）または 0 文字なら破棄して元のタブ名に戻す
+  finishRename(commit) {
+    const r = this.rename;
+    if (!r) return;
+    this.rename = null;
+    const name = r.input.value;
+    if (commit && name.length > 0) this.app.renameTab(r.id, name);
+    this.render();
+  }
+
   onMouseDown(e) {
-    if (e.button !== 0 || e.target.closest('.tab-close')) return;
+    if (e.button !== 0 || e.target.closest('.tab-close') || e.target.closest('.tab-title-input')) return;
     const tabEl = e.target.closest('.tab');
     if (!tabEl) return;
     this.drag = { id: tabEl.dataset.id, el: tabEl, x: e.clientX, active: false, index: -1 };

@@ -45,6 +45,7 @@ class Application {
   }
 
   tabTitle(tab) {
+    if (tab.name) return tab.name;
     const editor = this.mainArea && this.editor;
     let text = editor && editor.editingId === tab.root.id ? editor.text : tab.root.text;
     const chars = Array.from(text.replace(/[\r\n]/g, ''));
@@ -159,6 +160,16 @@ class Application {
       if (doc.tabs.length === 0) doc.tabs.push(Model.createTab()); // 最低 1 個は必ず存在する
       if (!this.findTab(this.activeTabId)) this.setActiveTab(doc.tabs[Math.min(index, doc.tabs.length - 1)].id);
       return { tabId: this.activeTabId };
+    }, { tabId: id });
+  }
+
+  // タブ名の変更（空文字・変更なしの場合は何もしない）
+  renameTab(id, name) {
+    const tab = this.findTab(id);
+    if (!tab || !name || name === this.tabTitle(tab)) return;
+    this.commit((doc) => {
+      doc.tabs.find((t) => t.id === id).name = name;
+      return { tabId: id };
     }, { tabId: id });
   }
 
