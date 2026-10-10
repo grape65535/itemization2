@@ -9,6 +9,7 @@ class Application {
     this.activeTabId = this.findTab(ui.activeTabId) ? ui.activeTabId : this.doc.tabs[0].id;
     this.selection = new Set();
     this.history = new History(Config.historyLimit);
+    this.pseudoClipboard = null; // アプリ内の擬似クリップボード { clips, text }
 
     const header = Util.el('header', 'app-header');
     const menus = Util.el('nav', 'menus');
@@ -23,6 +24,10 @@ class Application {
     this.mainArea = new MainArea(this, main);
 
     document.addEventListener('keydown', (e) => this.onKeyDown(e));
+    // 文字入力中以外のコピー・切り取り・貼り付け（文字入力欄では標準動作）
+    document.addEventListener('copy', (e) => this.onClipboardEvent(e, 'copy'));
+    document.addEventListener('cut', (e) => this.onClipboardEvent(e, 'cut'));
+    document.addEventListener('paste', (e) => this.onClipboardEvent(e, 'paste'));
     this.refresh();
   }
 
@@ -227,6 +232,112 @@ class Application {
     this.mainArea.draw();
   }
 
+  // ---- 全て選択・コピー・切り取り・貼り付け ----
+
+  // アクティブタブ内の選択中アイテム（文書順）
+  selectedIds() {
+    return [...this.selection]
+      .filter((id) => {
+        const entry = this.index.get(id);
+        return entry && entry.tab.id === this.activeTabId;
+      })
+      .sort((a, b) => this.index.get(a).order - this.index.get(b).order);
+  }
+
+  selectAll() {
+    this.editor.end();
+    this.selection.clear();
+    const walk = (item) => {
+      this.selection.add(item.id);
+      item.children.forEach(walk);
+    };
+    walk(this.activeTab.root);
+    this.mainArea.draw();
+  }
+
+  // 選択中アイテムのコピー用データ。選択が無ければ null
+  clipboardData() {
+    const ids = this.selectedIds();
+    if (ids.length === 0) return null;
+    const clips = ItemClipboard.fromSelection(this.index, ids);
+    return { clips, text: ItemClipboard.toText(clips), json: ItemClipboard.toJson(clips) };
+  }
+
+  onClipboardEvent(e, type) {
+    if (Util.isTextInput(e.target) || this.editor.isEditing || this.tabBar.rename) return;
+    if (type === 'paste') {
+      e.preventDefault();
+      const dt = e.clipboardData;
+      this.paste(dt.getData(ItemClipboard.MIME), dt.getData('text/plain'));
+      return;
+    }
+    const data = this.clipboardData();
+    if (!data) return;
+    e.preventDefault();
+    this.clipboardEventFired = true;
+    // システムのクリップボードに箇条書きの文字列と JSON を同居させる
+    e.clipboardData.setData('text/plain', data.text);
+    e.clipboardData.setData(ItemClipboard.MIME, data.json);
+    this.pseudoClipboard = { clips: data.clips, text: data.text };
+    if (type === 'cut') this.deleteSelected();
+  }
+
+  // メニューからのコピー・切り取り（copy/cut イベント経由。使えなければ文字列のみ書き込む）
+  menuCopy(cut) {
+    this.editor.end();
+    const data = this.clipboardData();
+    if (!data) return;
+    this.clipboardEventFired = false;
+    try {
+      document.execCommand(cut ? 'cut' : 'copy');
+    } catch (e) {
+      // 下でフォールバック
+    }
+    if (!this.clipboardEventFired) {
+      this.pseudoClipboard = { clips: data.clips, text: data.text };
+      if (navigator.clipboard) navigator.clipboard.writeText(data.text).catch(() => {});
+      if (cut) this.deleteSelected();
+    }
+  }
+
+  // メニューからの貼り付け（ブラウザの許可が得られなければ擬似クリップボードのみ）
+  async menuPaste() {
+    this.editor.end();
+    let text = null;
+    try {
+      if (navigator.clipboard) text = await navigator.clipboard.readText();
+    } catch (e) {
+      text = null;
+    }
+    this.paste('', text);
+  }
+
+  // JSON 形式があれば採用。無ければ擬似クリップボード（文字列が一致する場合）、それも無ければ箇条書きとして解釈する。
+  // 最後に選択したアイテム（選択が無ければルート）の最後の子として挿入する
+  paste(json, text) {
+    let clips = json ? ItemClipboard.fromJson(json) : null;
+    const pseudo = this.pseudoClipboard;
+    if (!clips && pseudo && (text === null || text === pseudo.text)) clips = pseudo.clips;
+    if (!clips && text && text.trim()) clips = ItemClipboard.parseText(text);
+    if (!clips || clips.length === 0) return;
+
+    let targetId = this.activeTab.root.id;
+    for (const id of this.selection) {
+      const entry = this.index.get(id);
+      if (entry && entry.tab.id === this.activeTabId) targetId = id;
+    }
+    let firstId = null;
+    this.commit((doc) => {
+      const target = Model.locate(doc, targetId).item;
+      const items = ItemClipboard.toItems(clips);
+      firstId = items[0].id;
+      target.collapsed = false;
+      target.children.push(...items);
+      return { itemId: firstId };
+    }, { itemId: targetId });
+    this.mainArea.scrollIntoView(firstId);
+  }
+
   // ---- キー操作（文字入力中以外） ----
 
   onKeyDown(e) {
@@ -239,6 +350,9 @@ class Application {
       e.preventDefault();
       if (e.shiftKey) this.redo();
       else this.undo();
+    } else if (ctrl && !e.altKey && !e.shiftKey && key === 'a') {
+      e.preventDefault();
+      this.selectAll();
     } else if (ctrl && !e.altKey && !e.shiftKey && key === 'y') {
       e.preventDefault();
       this.redo();

@@ -35,6 +35,7 @@ javascripts/               （index.html での読み込み順）
   model.js                 文書 JSON のツリー操作（生成・検証・索引・削除＋子の繰り上げ）
   history.js               全タブ共通の Undo/Redo 履歴（変更前後の JSON を保持）
   storage.js               localStorage への保存・復元
+  itemClipboard.js         コピー/貼り付け用の変換（選択→クリップ形式、箇条書き文字列の生成と解析、JSON）
   textMeasurer.js          文字幅計測と折り返し計算（CANVAS・寸法・カーソル行判定で共通使用）
   treeLayout.js            ツリー配置計算、[+][-] アイコン位置
   renderer.js              メインエリアの CANVAS 描画

@@ -275,3 +275,9 @@ body.tab-dragging * {
   font: inherit;
   background: #fff;
 }
+
+.menu-separator {
+  height: 1px;
+  margin: 4px 0;
+  background: #dde2e8;
+}

@@ -11,6 +11,11 @@ class MenuBar {
         items: [
           { label: '元に戻す', shortcut: 'Ctrl+Z', action: () => app.undo(), enabled: () => app.history.canUndo() },
           { label: 'やり直す', shortcut: 'Ctrl+Shift+Z', action: () => app.redo(), enabled: () => app.history.canRedo() },
+          { separator: true },
+          { label: '全て選択', shortcut: 'Ctrl+A', action: () => app.selectAll() },
+          { label: 'コピー', shortcut: 'Ctrl+C', action: () => app.menuCopy(false), enabled: () => app.selectedIds().length > 0 },
+          { label: '切り取り', shortcut: 'Ctrl+X', action: () => app.menuCopy(true), enabled: () => app.selectedIds().length > 0 },
+          { label: '貼り付け', shortcut: 'Ctrl+V', action: () => app.menuPaste() },
         ],
       },
       { label: '表示', items: [] },
@@ -46,6 +51,10 @@ class MenuBar {
       menu.dropdown.append(item);
     }
     for (const def of menu.items) {
+      if (def.separator) {
+        menu.dropdown.append(Util.el('div', 'menu-separator'));
+        continue;
+      }
       const item = Util.el('button', 'menu-item');
       item.append(Util.el('span', 'menu-item-label', def.label), Util.el('span', 'menu-item-shortcut', def.shortcut || ''));
       item.disabled = def.enabled ? !def.enabled() : false;
