@@ -20,9 +20,9 @@ class EditToolbar {
       { id: 'strike', title: '取消し線', icon: ICON.strike, textOnly: true, action: (ed) => ed.toggleStyle('strike') },
       { id: 'underline', title: '下線', icon: ICON.underline, textOnly: true, action: (ed) => ed.toggleStyle('underline') },
       { id: 'color', title: '文字色', icon: ICON.color, popup: true, textOnly: true },
-      { id: 'bg', title: '文字の背景色', icon: ICON.bg, popup: true, textOnly: true },
+      { id: 'bg', title: '文字背景色', icon: ICON.bg, popup: true, textOnly: true },
       { separator: true },
-      { id: 'fill', title: 'アイテムの背景色', icon: ICON.fill, popup: true },
+      { id: 'fill', title: 'アイテム背景色', icon: ICON.fill, popup: true },
       { separator: true },
       { id: 'left', title: '左寄せ', icon: ICON.left, action: (ed) => ed.setAlign('left') },
       { id: 'center', title: '中央寄せ', icon: ICON.center, action: (ed) => ed.setAlign('center') },
@@ -36,8 +36,8 @@ class EditToolbar {
       }
       const button = Util.el('button', 'edit-toolbar-button' + (def.popup ? ' has-popup' : ''));
       button.type = 'button';
-      button.title = def.title;
       button.setAttribute('aria-label', def.title);
+      button.dataset.tooltip = def.title;
       button.innerHTML = def.icon;
       button.dataset.id = def.id;
       this.buttons.set(def.id, { def, button });
@@ -55,6 +55,36 @@ class EditToolbar {
       }
     });
     this.el.addEventListener('click', (e) => this.onClick(e));
+
+    // ボタンの説明のツールチップ（マウスを置くと少し遅れて表示）
+    this.tooltip = Util.el('div', 'edit-toolbar-tooltip');
+    this.tooltipTimer = null;
+    this.el.addEventListener('mouseover', (e) => {
+      const button = e.target.closest('.edit-toolbar-button');
+      if (button) this.showTooltip(button);
+    });
+    this.el.addEventListener('mouseout', (e) => {
+      const button = e.target.closest('.edit-toolbar-button');
+      if (button && !button.contains(e.relatedTarget)) this.hideTooltip();
+    });
+    this.el.addEventListener('mousedown', () => this.hideTooltip(), true);
+  }
+
+  showTooltip(button) {
+    if (this.tooltip.parentNode && this.tooltip.dataset.for === button.dataset.id) return;
+    this.hideTooltip();
+    this.tooltipTimer = setTimeout(() => {
+      this.tooltip.textContent = button.dataset.tooltip;
+      this.tooltip.dataset.for = button.dataset.id;
+      this.tooltip.style.left = button.offsetLeft + button.offsetWidth / 2 + 'px';
+      this.el.append(this.tooltip);
+    }, 400);
+  }
+
+  hideTooltip() {
+    clearTimeout(this.tooltipTimer);
+    this.tooltipTimer = null;
+    this.tooltip.remove();
   }
 
   get editor() {
@@ -157,6 +187,7 @@ class EditToolbar {
 
   hide() {
     this.closePopup();
+    this.hideTooltip();
     this.el.style.display = 'none';
   }
 
