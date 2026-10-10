@@ -13,6 +13,7 @@ class EditToolbar {
     this.popup = null; // { id, el }
     this.selectionDecorator = new SelectionDecorator(area.app);
     this.shownKey = null; // 表示中の対象（変わったらポップアップを閉じる）
+    this.dismissedKey = null; // × で閉じた時の対象（文字入力を始めるか、選択が変わるまで表示しない）
     // 最後に選んだ色（ボタンのアイコンに表示する）
     this.lastColor = { color: Config.palette[3].text, bg: Config.palette[5].pale, fill: Config.palette[9].pale };
 
@@ -48,6 +49,14 @@ class EditToolbar {
       this.buttons.set(def.id, { def, button });
       this.el.append(button);
     }
+    // ツールバーを閉じる × ボタン（装飾のボタンと区別できるよう、右端に離して丸いボタンにする）
+    this.closeButton = Util.el('button', 'edit-toolbar-button edit-toolbar-close');
+    this.closeButton.type = 'button';
+    this.closeButton.setAttribute('aria-label', 'ツールバーを閉じる');
+    this.closeButton.dataset.tooltip = 'ツールバーを閉じる';
+    this.closeButton.dataset.id = 'close';
+    this.closeButton.innerHTML = ICON.close;
+    this.el.append(this.closeButton);
 
     // 文字入力欄からフォーカスを奪わない（mousedown の既定動作を止める）。メインエリアのマウス操作にも渡さない
     this.el.addEventListener('mousedown', (e) => {
@@ -106,6 +115,10 @@ class EditToolbar {
     if (option && this.popup) {
       const value = option.dataset.value;
       this.choose(this.popup.id, value === '' ? null : value);
+      return;
+    }
+    if (e.target.closest('.edit-toolbar-close')) {
+      this.dismiss();
       return;
     }
     const button = e.target.closest('.edit-toolbar-button');
@@ -191,15 +204,37 @@ class EditToolbar {
     const ids = this.selectionDecorator.ids();
     const node = area.layout && !(area.drag && area.drag.type !== 'pending') ? this.selectionDecorator.anchorNode(area.layout) : null;
     if (!node) {
+      this.dismissedKey = null;
       this.hide();
       return;
     }
-    this.show(node, 'sel:' + ids.join(','));
-    this.update();
+    if (this.show(node, 'sel:' + ids.join(','))) this.update();
   }
 
-  // アイテムの上に表示する（上に余地が無ければ下）。key は表示対象を表す文字列
+  // × ボタン：ツールバーを一時的に閉じる（文字入力中なら次に文字入力を始めるまで、
+  // アイテム選択中なら選択が変わるか文字入力を始めるまで表示しない）
+  dismiss() {
+    this.dismissedKey = this.shownKey;
+    this.hide();
+    this.dismissedKey = this.dismissedKey || 'dismissed';
+  }
+
+  // 文字入力を始めた時に、× で閉じたツールバーを再び表示できるようにする
+  restore() {
+    this.dismissedKey = null;
+  }
+
+  // アイテムの上に表示する（上に余地が無ければ下）。key は表示対象を表す文字列。× で閉じていれば表示せず false
   show(node, key = 'edit:' + node.id) {
+    if (this.dismissedKey !== null && this.dismissedKey !== key) {
+      // 文字入力中に閉じた後、入力を終えて同じアイテムが選択されたままなら閉じたままにする
+      if (this.dismissedKey.startsWith('edit:') && key.startsWith('sel:')) this.dismissedKey = key;
+      else this.dismissedKey = null;
+    }
+    if (this.dismissedKey !== null) {
+      this.hide();
+      return false;
+    }
     if (key !== this.shownKey) this.closePopup();
     this.shownKey = key;
     const C = Config;
@@ -209,6 +244,7 @@ class EditToolbar {
     this.el.style.display = 'flex';
     this.el.style.left = node.x + 'px';
     this.el.style.top = top + 'px';
+    return true;
   }
 
   hide() {
@@ -260,6 +296,8 @@ EditToolbar.ICONS = (() => {
     left: svg(lines([[3, 14], [3, 9], [3, 14], [3, 9]])),
     center: svg(lines([[3, 14], [5.5, 9], [3, 14], [5.5, 9]])),
     right: svg(lines([[3, 14], [8, 9], [3, 14], [8, 9]])),
+    close: '<svg viewBox="0 0 20 20" width="14" height="14" aria-hidden="true">' +
+      '<path d="M5 5 L15 15 M15 5 L5 15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
     clear: svg(`<text x="8.5" y="15" ${font} font-size="14" font-weight="bold" text-anchor="middle" fill="currentColor">A</text>` +
       '<path d="M3 17 L17 3" stroke="#e60000" stroke-width="1.8" stroke-linecap="round"/>' +
       '<path d="M13 13 l5 5 M18 13 l-5 5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>'),

@@ -68,6 +68,7 @@ class ItemEditor {
     if (!this.app.index.get(itemId)) return;
     if (this.editingId !== null) this.commitText();
     const item = this.app.index.get(itemId).item;
+    this.area.toolbar.restore();
     this.editingId = itemId;
     this.ta.value = item.text;
     this.prevText = item.text;
