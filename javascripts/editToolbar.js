@@ -224,7 +224,7 @@ class EditToolbar {
     this.dismissedKey = null;
   }
 
-  // アイテムの上に表示する（上に余地が無ければ下）。key は表示対象を表す文字列。× で閉じていれば表示せず false
+  // アイテムの上に表示する（上に余地が無ければ下。横はアイテムの中央）。key は表示対象を表す文字列。× で閉じていれば表示せず false
   show(node, key = 'edit:' + node.id) {
     if (this.dismissedKey !== null && this.dismissedKey !== key) {
       // 文字入力中に閉じた後、入力を終えて同じアイテムが選択されたままなら閉じたままにする
@@ -242,8 +242,13 @@ class EditToolbar {
     let top = node.y - C.toolbarHeight - C.toolbarGap;
     if (top < scroller.scrollTop) top = node.y + node.h + C.toolbarGap;
     this.el.style.display = 'flex';
-    this.el.style.left = node.x + 'px';
     this.el.style.top = top + 'px';
+    // 横位置はアイテムの中央に揃え、表示範囲からはみ出す場合は範囲内に収める
+    const margin = 4;
+    const width = this.el.offsetWidth;
+    const minLeft = scroller.scrollLeft + margin;
+    const maxLeft = scroller.scrollLeft + scroller.clientWidth - width - margin;
+    this.el.style.left = Math.max(minLeft, Math.min(maxLeft, Math.round(node.x + node.w / 2 - width / 2))) + 'px';
     return true;
   }
 
