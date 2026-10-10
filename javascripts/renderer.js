@@ -6,6 +6,9 @@ const Renderer = {
     background: '#f7f8fa',
     connector: '#8a929c',
     itemFill: '#ffffff',
+    candidateFill: '#cfe0ff', // 範囲選択の候補（選択確定後は通常の背景に戻る）
+    marqueeFill: 'rgba(110, 118, 130, 0.12)', // 候補の青と区別するため無彩色
+    marqueeBorder: '#6b7480',
     itemBorder: '#000000',
     text: '#000000',
     selected: '#1e64f0',
@@ -48,6 +51,10 @@ const Renderer = {
       }
     }
 
+    // 範囲選択の矩形の塗りはアイテムの背面に描き、候補アイテムの背景色と混ざらないようにする
+    const drag = state.drag;
+    if (drag && drag.type === 'marquee') Renderer.drawMarquee(ctx, drag, 'fill');
+
     // アイテム
     ctx.font = C.font;
     ctx.textBaseline = 'middle';
@@ -57,9 +64,8 @@ const Renderer = {
       if (TreeLayout.isToggleVisible(node)) Renderer.drawToggle(ctx, node);
     }
 
-    const drag = state.drag;
     if (drag && drag.type === 'item') Renderer.drawItemDrag(ctx, layout, drag);
-    if (drag && drag.type === 'marquee') Renderer.drawMarquee(ctx, drag);
+    if (drag && drag.type === 'marquee') Renderer.drawMarquee(ctx, drag, 'stroke');
 
     ctx.restore();
   },
@@ -85,7 +91,7 @@ const Renderer = {
     const candidate = !selected && state.candidates && state.candidates.has(node.id);
 
     Renderer.roundRectPath(ctx, node.x + 0.5, node.y + 0.5, node.w - 1, node.h - 1, C.cornerRadius);
-    ctx.fillStyle = col.itemFill;
+    ctx.fillStyle = candidate ? col.candidateFill : col.itemFill;
     ctx.fill();
     ctx.lineWidth = selected ? 2 : 1;
     ctx.strokeStyle = selected || candidate ? col.selected : col.itemBorder;
@@ -166,15 +172,21 @@ const Renderer = {
     ctx.restore();
   },
 
-  drawMarquee(ctx, drag) {
+  // part: 'fill'（アイテムの背面）/ 'stroke'（アイテムの前面、点線）
+  drawMarquee(ctx, drag, part) {
     const r = drag.rect;
     if (!r) return;
+    const col = Renderer.colors;
     ctx.save();
-    ctx.fillStyle = 'rgba(30, 100, 240, 0.08)';
-    ctx.strokeStyle = Renderer.colors.selected;
-    ctx.lineWidth = 1;
-    ctx.fillRect(r.x, r.y, r.w, r.h);
-    ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w, r.h);
+    if (part === 'fill') {
+      ctx.fillStyle = col.marqueeFill;
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+    } else {
+      ctx.strokeStyle = col.marqueeBorder;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 3]);
+      ctx.strokeRect(r.x + 0.5, r.y + 0.5, r.w, r.h);
+    }
     ctx.restore();
   },
 };
