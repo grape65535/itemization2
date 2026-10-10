@@ -24,7 +24,13 @@ class MenuBar {
           { label: 'TSVとしてコピー', action: () => app.copyAs('tsv'), enabled: () => app.selectedIds().length > 0 },
         ],
       },
-      { label: '表示', items: [] },
+      {
+        label: '表示',
+        items: [
+          { label: 'ツリーを全て開く', shortcut: 'Ctrl+E', action: () => app.setTreeCollapsed(false) },
+          { label: 'ツリーを全て閉じる', shortcut: 'Ctrl+Shift+E', action: () => app.setTreeCollapsed(true) },
+        ],
+      },
     ];
     this.openMenu = null;
 

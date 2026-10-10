@@ -233,6 +233,23 @@ class Application {
     this.mainArea.draw();
   }
 
+  // ---- ツリーを全て開く／閉じる ----
+
+  // 選択アイテム（無ければルート）とその全ての子孫を開く／閉じる。子のあるアイテムだけを対象にする
+  setTreeCollapsed(collapsed) {
+    this.editor.end();
+    const ids = this.selectedIds();
+    const targets = ids.length ? ids : [this.activeTab.root.id];
+    this.commit((doc) => {
+      const walk = (item) => {
+        if (item.children.length > 0) item.collapsed = collapsed;
+        item.children.forEach(walk);
+      };
+      for (const id of targets) walk(Model.locate(doc, id).item);
+      return { itemId: targets[0] };
+    }, { itemId: targets[0] });
+  }
+
   // ---- 全て選択・コピー・切り取り・貼り付け ----
 
   // アクティブタブ内の選択中アイテム（文書順）
@@ -378,6 +395,9 @@ class Application {
       e.preventDefault();
       if (e.shiftKey) this.redo();
       else this.undo();
+    } else if (ctrl && !e.altKey && key === 'e') {
+      e.preventDefault();
+      this.setTreeCollapsed(e.shiftKey);
     } else if (ctrl && !e.altKey && !e.shiftKey && key === 'a') {
       e.preventDefault();
       this.selectAll();
