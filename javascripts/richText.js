@@ -1,7 +1,8 @@
 'use strict';
 
 // 文字の装飾（部分的な文字スタイル）とアイテム全体の装飾。
-//   保存形式: Item.spans = [{ start, end, size?, bold?, strike?, underline?, color?, bg? }]（装飾のある範囲だけ、昇順・重なりなし）
+//   保存形式: Item.spans = [{ start, end, size?, bold?, strike?, underline?, color?, colorOverLink?, bg? }]（装飾のある範囲だけ、昇順・重なりなし）
+//             colorOverLink: URL の文字に、文字を選択して文字色を指定した印（ハイパーリンクの色より文字色を優先する）
 //             Item.fill = アイテム背景色、Item.align = 'center' | 'right'（左寄せは省略）
 //   編集・描画時は文字ごとのスタイル配列（null = 装飾なし）で扱う。等しいスタイルは同じオブジェクトを共有する（参照で比較できる）
 const RichText = {
@@ -22,6 +23,7 @@ const RichText = {
     if (raw.strike === true) style.strike = true;
     if (raw.underline === true) style.underline = true;
     if (RichText.isColor(raw.color)) style.color = raw.color.toLowerCase();
+    if (style.color && raw.colorOverLink === true) style.colorOverLink = true;
     if (RichText.isColor(raw.bg)) style.bg = raw.bg.toLowerCase();
     const key = JSON.stringify(style);
     if (key === '{}') return null;
@@ -70,6 +72,45 @@ const RichText = {
       strikeY: baseline - size * 0.3,
       thickness,
     };
+  },
+
+  // 文字列中の URL の範囲 [{ start, end }]（http:// / https:// で始まる ASCII の文字の並び。末尾の句読点・対応しない括弧は除く）
+  URL_PATTERN: /https?:\/\/[A-Za-z0-9\-._~:/?#[\]@!$&'()*+,;=%]+/g,
+  urlRanges(text) {
+    const ranges = [];
+    for (const m of text.matchAll(RichText.URL_PATTERN)) {
+      let url = m[0];
+      for (;;) {
+        const last = url[url.length - 1];
+        if (/[.,;:!?'"]/.test(last)) url = url.slice(0, -1);
+        else if (last === ')' && (url.match(/\(/g) || []).length < (url.match(/\)/g) || []).length) url = url.slice(0, -1);
+        else if (last === ']' && (url.match(/\[/g) || []).length < (url.match(/\]/g) || []).length) url = url.slice(0, -1);
+        else break;
+      }
+      if (/^https?:\/\/[^/]/.test(url)) ranges.push({ start: m.index, end: m.index + url.length });
+    }
+    return ranges;
+  },
+
+  // 表示用のスタイル配列：URL の文字はハイパーリンク（下線＋青）にする。
+  // 文字色は、文字を選択して指定したもの（colorOverLink）だけがハイパーリンクの色より優先する
+  displayStyles(text, styles) {
+    const ranges = RichText.urlRanges(text);
+    if (ranges.length === 0) return styles;
+    const display = styles.slice();
+    for (const r of ranges) {
+      for (let i = r.start; i < r.end; i++) {
+        const st = styles[i];
+        const color = st && st.colorOverLink ? st.color : Config.linkColor;
+        display[i] = RichText.intern(Object.assign({}, st, { underline: true, color, colorOverLink: false }));
+      }
+    }
+    return display;
+  },
+
+  // URL の範囲に含まれるオフセットか
+  inRanges(ranges, i) {
+    return ranges.some((r) => r.start <= i && i < r.end);
   },
 
   // 保存形式 → 文字ごとのスタイル配列

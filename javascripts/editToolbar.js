@@ -381,7 +381,11 @@ class SelectionDecorator {
 
   applyStyle(prop, value) {
     this.decorate((item) => {
-      const styles = RichText.toArray(item.text, item.spans).map((st) => RichText.withProp(st, prop, value));
+      // アイテム全体の文字色の変更では、URL（ハイパーリンク）の色を優先する（文字選択で付けた優先の印も外す）
+      const styles = RichText.toArray(item.text, item.spans).map((st) => {
+        const next = RichText.withProp(st, prop, value);
+        return prop === 'color' ? RichText.withProp(next, 'colorOverLink', null) : next;
+      });
       item.spans = RichText.toSpans(styles);
     });
   }

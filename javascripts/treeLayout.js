@@ -17,7 +17,8 @@ const TreeLayout = {
     const measure = (item, depth, parentId) => {
       const src = override && override.id === item.id ? override : item;
       const text = src.text;
-      const styles = src === item ? RichText.toArray(text, item.spans) : RichText.fit(src.styles, text.length);
+      // 表示用のスタイル（URL はハイパーリンクの見た目）。幅は装飾のスタイルと同じ
+      const styles = RichText.displayStyles(text, src === item ? RichText.toArray(text, item.spans) : RichText.fit(src.styles, text.length));
       const lines = measurer.wrap(text, maxWidth, styles);
       // ステータスのバッジ（文字領域の左上。文字列はその下から始める）
       let status = null;

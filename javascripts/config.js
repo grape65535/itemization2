@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.1.11',
+  version: 'v2.1.12',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',
@@ -50,6 +50,8 @@ const Config = {
     ['紫', '#8000e0'], ['赤紫', '#e000c8'], ['桃', '#ff5096'], ['オリーブ', '#808000'],
   ],
   paleRatio: 0.8,
+  // 文字列中の URL（ハイパーリンク）の表示色（文字色の「青」と同じ）。下線も付ける
+  linkColor: '#0046ff',
   // タブの設定（オプション → タブの設定）
   maxContentWidthRange: [100, 1000],
   statusMax: 12,

@@ -399,7 +399,12 @@ class ItemEditor {
     const e = this.ta.selectionEnd;
     if (this.editingId === null || s >= e) return;
     const styles = RichText.fit(this.styles, this.ta.value.length).slice();
-    for (let i = s; i < e; i++) styles[i] = RichText.withProp(styles[i], prop, value);
+    // 文字を選択して指定した文字色は、URL（ハイパーリンク）の文字でも優先する。標準の色に戻すとハイパーリンクの色になる
+    const urls = prop === 'color' ? RichText.urlRanges(this.ta.value) : [];
+    for (let i = s; i < e; i++) {
+      styles[i] = RichText.withProp(styles[i], prop, value);
+      if (prop === 'color') styles[i] = RichText.withProp(styles[i], 'colorOverLink', !!value && RichText.inRanges(urls, i));
+    }
     this.pushUndo();
     this.styles = styles;
     this.decorated();
