@@ -6,7 +6,7 @@ const Renderer = {
     background: '#f7f8fa',
     connector: '#8a929c',
     itemFill: '#ffffff',
-    candidateFill: '#cfe0ff', // 範囲選択の候補（選択確定後は通常の背景に戻る）
+    candidateFill: '#cfe0ff', // 選択中・範囲選択の候補のアイテムの背景
     marqueeFill: 'rgba(110, 118, 130, 0.12)', // 候補の青と区別するため無彩色
     marqueeBorder: '#6b7480',
     itemBorder: '#000000',
@@ -93,7 +93,7 @@ const Renderer = {
     const candidate = !selected && state.candidates && state.candidates.has(node.id);
 
     Renderer.roundRectPath(ctx, node.x + 0.5, node.y + 0.5, node.w - 1, node.h - 1, C.cornerRadius);
-    ctx.fillStyle = candidate ? col.candidateFill : node.fill || col.itemFill;
+    ctx.fillStyle = selected || candidate ? col.candidateFill : node.fill || col.itemFill;
     ctx.fill();
     ctx.lineWidth = selected ? 2 : 1;
     ctx.strokeStyle = selected || candidate ? col.selected : col.itemBorder;
