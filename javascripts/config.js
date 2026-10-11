@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.1.4',
+  version: 'v2.1.5',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',
@@ -21,7 +21,7 @@ const Config = {
   paddingX: 8,
   paddingY: 5,
   minContentWidth: 24,
-  maxContentWidth: 360, // 「設定で変更可能な最大横幅」（設定 UI は未実装）
+  maxContentWidth: 360, // アイテムの最大表示幅の初期値（タブの設定で変更可能）
   cornerRadius: 6,
   borderHitWidth: 3, // 枠線の両側この幅(px)以内のクリックは枠線クリックとみなす
 
@@ -50,6 +50,38 @@ const Config = {
     ['紫', '#8000e0'], ['赤紫', '#e000c8'], ['桃', '#ff5096'], ['オリーブ', '#808000'],
   ],
   paleRatio: 0.8,
+  // タブの設定（オプション → タブの設定）
+  maxContentWidthRange: [100, 1000],
+  statusMax: 12,
+  statusNameMax: 12,
+  // ステータスのバッジの色（背景色と文字色の組）。保存データには key を記録する
+  statusColors: [
+    { key: 'gray', name: '灰', bg: '#b5b5b5', fg: '#000000' },
+    { key: 'black', name: '黒', bg: '#222222', fg: '#ffffff' },
+    { key: 'red', name: '赤', bg: '#ff6b6b', fg: '#000000' },
+    { key: 'orange', name: '橙', bg: '#ffa94d', fg: '#000000' },
+    { key: 'yellow', name: '黄', bg: '#ffd43b', fg: '#000000' },
+    { key: 'lime', name: '黄緑', bg: '#a9e34b', fg: '#000000' },
+    { key: 'green', name: '緑', bg: '#51cf66', fg: '#000000' },
+    { key: 'teal', name: '青緑', bg: '#38d9a9', fg: '#000000' },
+    { key: 'cyan', name: '水色', bg: '#66d9e8', fg: '#000000' },
+    { key: 'blue', name: '青', bg: '#74a9ff', fg: '#000000' },
+    { key: 'navy', name: '紺', bg: '#1c3d8f', fg: '#ffffff' },
+    { key: 'purple', name: '紫', bg: '#c49bff', fg: '#000000' },
+    { key: 'pink', name: '桃', bg: '#ff8fc8', fg: '#000000' },
+    { key: 'brown', name: '茶', bg: '#8d5524', fg: '#ffffff' },
+    { key: 'darkgreen', name: '深緑', bg: '#2b8a3e', fg: '#ffffff' },
+    { key: 'darkred', name: '深紅', bg: '#b02a2a', fg: '#ffffff' },
+  ],
+  defaultStatuses: [
+    { name: '未着手', color: 'gray' },
+    { name: '作業中', color: 'blue' },
+    { name: '完了', color: 'green' },
+    { name: '保留', color: 'purple' },
+    { name: 'キャンセル', color: 'black' },
+    { name: '確認中', color: 'red' },
+  ],
+
   // 文字入力中のツールバーの高さ(px)とアイテムとの間隔
   toolbarHeight: 30,
   toolbarGap: 6,

@@ -1,6 +1,6 @@
 'use strict';
 
-// ヘッダのメニュー（ファイル・編集・表示）
+// ヘッダのメニュー（ファイル・編集・表示・オプション）
 class MenuBar {
   constructor(app, container) {
     this.app = app;
@@ -37,6 +37,12 @@ class MenuBar {
         items: [
           { label: 'ツリーを全て開く', shortcut: 'Ctrl+E', action: () => app.setTreeCollapsed(false) },
           { label: 'ツリーを全て閉じる', shortcut: 'Ctrl+Shift+E', action: () => app.setTreeCollapsed(true) },
+        ],
+      },
+      {
+        label: 'オプション',
+        items: [
+          { label: 'タブの設定', action: () => app.tabSettings.open() },
         ],
       },
     ];

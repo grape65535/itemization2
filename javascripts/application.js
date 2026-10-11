@@ -23,6 +23,7 @@ class Application {
     this.menuBar = new MenuBar(this, menus);
     this.tabBar = new TabBar(this, tabBar);
     this.mainArea = new MainArea(this, main);
+    this.tabSettings = new TabSettingsDialog(this);
 
     // ファイルを開く（OS 標準のダイアログ）・画面へのドロップ
     this.fileInput = Util.el('input', 'file-input');
@@ -369,6 +370,7 @@ class Application {
   }
 
   onClipboardEvent(e, type) {
+    if (this.tabSettings.isOpen) return;
     if (Util.isTextInput(e.target) || this.editor.isEditing || this.tabBar.rename) return;
     if (type === 'paste') {
       e.preventDefault();
@@ -473,6 +475,11 @@ class Application {
   // ---- キー操作（文字入力中以外） ----
 
   onKeyDown(e) {
+    // モーダルダイアログ表示中はアプリのショートカットを無効にする（ESC は閉じる）
+    if (this.tabSettings.isOpen) {
+      if (e.key === 'Escape') this.tabSettings.close();
+      return;
+    }
     if (this.mainArea.handleKeyDown(e)) return;
     if (e.key === 'Escape' && this.menuBar.closeAll()) return;
     if (e.key === 'Escape' && this.mainArea.toolbar.closePopup()) return;

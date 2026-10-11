@@ -2,11 +2,14 @@
 
 // アイテムツリーの配置計算。
 // ルートを左上に置き、左→右（階層）、上→下（兄弟）へ広げる。
-// 同じ階層のアイテムは左端を揃え、親は可視の子群（最初の子と最後の子の縦中央の中間）に縦中央を合わせる。
+// 同じ階層のアイテムは左端を揃え、親は可視の子群（最初の子と最後の子の縦中央の中間）に縦中央を合わせる（タブの設定で上寄せも可）。
 const TreeLayout = {
   // override: 文字入力中アイテムの { id, text, styles, fill, align }（未確定の内容で寸法を計算するため）
-  compute(root, measurer, override) {
+  // options: タブの設定（最大表示幅 maxWidth、親の縦位置 parentAlign）
+  compute(root, measurer, override, options) {
     const C = Config;
+    const maxWidth = (options && options.maxWidth) || C.maxContentWidth;
+    const parentTop = !!options && options.parentAlign === 'top';
     const nodes = new Map();
     const order = []; // 可視アイテムの文書順
     const maxWidthByDepth = [];
@@ -15,7 +18,7 @@ const TreeLayout = {
       const src = override && override.id === item.id ? override : item;
       const text = src.text;
       const styles = src === item ? RichText.toArray(text, item.spans) : RichText.fit(src.styles, text.length);
-      const lines = measurer.wrap(text, C.maxContentWidth, styles);
+      const lines = measurer.wrap(text, maxWidth, styles);
       let contentWidth = C.minContentWidth;
       for (const line of lines) contentWidth = Math.max(contentWidth, line.width);
       contentWidth = Math.ceil(contentWidth);
@@ -82,7 +85,8 @@ const TreeLayout = {
       const last = node.children[node.children.length - 1];
       const firstCenter = first.subtreeTop + first.relTop + first.h / 2;
       const lastCenter = last.subtreeTop + last.relTop + last.h / 2;
-      let top = Math.round((firstCenter + lastCenter) / 2 - node.h / 2);
+      // 中央寄せ: 最初と最後の子の縦中央の中間に縦中央を合わせる。上寄せ: 最初の子と上端を揃える
+      let top = parentTop ? first.subtreeTop + first.relTop : Math.round((firstCenter + lastCenter) / 2 - node.h / 2);
       let shift = 0;
       if (top < 0) {
         shift = -top;

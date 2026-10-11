@@ -469,3 +469,194 @@ body.busy,
 body.busy * {
   cursor: progress !important;
 }
+
+/* ---- モーダルダイアログ（タブの設定） ---- */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(20, 28, 40, 0.45);
+}
+
+.modal-dialog {
+  display: flex;
+  flex-direction: column;
+  width: 640px;
+  max-width: 100%;
+  max-height: 100%;
+  background: #fff;
+  border-radius: 8px;
+  box-shadow: 0 10px 32px rgba(0, 0, 0, 0.3);
+}
+
+.modal-title {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 14px 20px;
+  border-bottom: 1px solid #dde2e8;
+  font-size: 16px;
+  font-weight: bold;
+}
+
+.modal-subtitle {
+  overflow: hidden;
+  color: #6b7480;
+  font-size: 13px;
+  font-weight: normal;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.modal-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px 20px;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 20px;
+  border-top: 1px solid #dde2e8;
+}
+
+.settings-field {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.settings-field-block {
+  align-items: flex-start;
+}
+
+.settings-label {
+  flex: none;
+  width: 170px;
+  font-weight: bold;
+}
+
+.settings-field-block .settings-label {
+  padding-top: 4px;
+}
+
+.settings-select,
+.settings-input {
+  height: 28px;
+  box-sizing: border-box;
+  padding: 2px 6px;
+  border: 1px solid #b8c0ca;
+  border-radius: 4px;
+  font: inherit;
+  background: #fff;
+}
+
+.settings-input.invalid {
+  border-color: #d9534f;
+  background: #fff3f3;
+}
+
+.settings-range {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-range input {
+  flex: 1;
+}
+
+.settings-range-value {
+  min-width: 56px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-statuses {
+  flex: 1;
+  min-width: 0;
+}
+
+.status-row {
+  display: grid;
+  grid-template-columns: 150px 90px 1fr auto;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+
+.status-header {
+  color: #6b7480;
+  font-size: 12px;
+}
+
+.status-sample {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+/* ステータスのバッジ（CSS フレームワークの tag/badge 風） */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 10px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: bold;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.settings-button {
+  height: 30px;
+  padding: 0 16px;
+  border: 1px solid #b8c0ca;
+  border-radius: 4px;
+  background: #fff;
+  font: inherit;
+  cursor: pointer;
+}
+
+.settings-button:hover:not(:disabled) {
+  background: #eef2f7;
+}
+
+.settings-button:disabled {
+  color: #aaa;
+  background: #f1f3f5;
+  cursor: default;
+}
+
+.settings-button.primary {
+  min-width: 96px;
+  border-color: #1e64f0;
+  background: #1e64f0;
+  color: #fff;
+}
+
+.settings-button.primary:hover {
+  background: #1653cc;
+}
+
+.status-remove {
+  height: 26px;
+  padding: 0 10px;
+}
+
+.status-add {
+  margin-top: 2px;
+}
+
+.settings-error {
+  min-height: 1.2em;
+  color: #d9534f;
+}

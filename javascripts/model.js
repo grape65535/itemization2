@@ -2,7 +2,8 @@
 
 // 保存データ（JSON）のツリー操作
 //   Document = { format, tabs: [Tab] }
-//   Tab      = { id, name?, root: Item }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
+//   Tab      = { id, name?, root: Item, options: TabOptions }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
+//   TabOptions = { parentAlign: 'center'|'top', maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
 //   Item     = { id, text, collapsed, children: [Item], spans?, fill?, align? }（装飾は richText.js を参照）
 const Model = {
   FORMAT: 1,
@@ -12,7 +13,30 @@ const Model = {
   },
 
   createTab() {
-    return { id: Util.newId(), root: Model.createItem('') };
+    return { id: Util.newId(), root: Model.createItem(''), options: Model.normalizeOptions(null) };
+  },
+
+  // タブの設定を検証・補正する（無い項目は初期値）
+  normalizeOptions(raw) {
+    const C = Config;
+    const o = raw && typeof raw === 'object' ? raw : {};
+    const [minW, maxW] = C.maxContentWidthRange;
+    const width = Math.round(Number(o.maxWidth));
+    const colors = C.statusColors.map((c) => c.key);
+    const statuses = Array.isArray(o.statuses)
+      ? o.statuses
+        .filter((s) => s && typeof s.name === 'string' && s.name.trim())
+        .slice(0, C.statusMax)
+        .map((s) => ({
+          name: Array.from(s.name.trim()).slice(0, C.statusNameMax).join(''),
+          color: colors.includes(s.color) ? s.color : colors[0],
+        }))
+      : C.defaultStatuses.map((s) => Object.assign({}, s));
+    return {
+      parentAlign: o.parentAlign === 'top' ? 'top' : 'center',
+      maxWidth: Number.isFinite(width) ? Util.clamp(width, minW, maxW) : C.maxContentWidth,
+      statuses,
+    };
   },
 
   createDocument() {
@@ -42,6 +66,7 @@ const Model = {
       tabs: raw.tabs.map((tab) => {
         const fixed = { id: uniqueId(tab && tab.id), root: fixItem(tab && tab.root) };
         if (tab && typeof tab.name === 'string' && tab.name) fixed.name = tab.name;
+        fixed.options = Model.normalizeOptions(tab && tab.options);
         return fixed;
       }),
     };

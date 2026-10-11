@@ -60,7 +60,7 @@ class MainArea {
       }
     }
     const override = this.editor.isEditing ? this.editor.override : null;
-    this.layout = TreeLayout.compute(tab.root, this.measurer, override);
+    this.layout = TreeLayout.compute(tab.root, this.measurer, override, tab.options);
     this.spacer.style.width = this.layout.width + 'px';
     this.spacer.style.height = this.layout.height + 'px';
     if (this.renderedTabId !== tab.id) {
