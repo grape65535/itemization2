@@ -175,10 +175,26 @@ class MainArea {
     return this.measurer.offsetAt(node.text, node.styles, line, p.x - node.x - Config.paddingX - line.x);
   }
 
+  // 文字入力中でない時、ハイパーリンク（URL）の文字の上なら、その URL を返す
+  linkAt(hit, p) {
+    if (this.editor.isEditing || !hit || hit.type !== 'item' || hit.part !== 'inner') return null;
+    const node = this.layout.nodes.get(hit.id);
+    const y = p.y - node.y - Config.paddingY;
+    const index = TreeLayout.lineIndexAtY(node, y);
+    const line = node.lines[index];
+    if (y < line.top || y >= line.top + line.height) return null;
+    const i = this.measurer.charIndexAt(node.text, node.styles, line, p.x - node.x - Config.paddingX - line.x);
+    if (i < 0) return null;
+    const range = RichText.urlRanges(node.text).find((r) => r.start <= i && i < r.end);
+    return range ? node.text.slice(range.start, range.end) : null;
+  }
+
   updateCursor(e) {
     if (this.drag) return;
-    const hit = this.layout && this.hitTest(this.toContent(e));
-    this.scroller.style.cursor = !hit ? 'default' : hit.type === 'toggle' ? 'pointer' : hit.part === 'inner' ? 'text' : 'default';
+    const p = this.layout && this.toContent(e);
+    const hit = this.layout && this.hitTest(p);
+    this.scroller.style.cursor = !hit ? 'default' : hit.type === 'toggle' || this.linkAt(hit, p) ? 'pointer'
+      : hit.part === 'inner' ? 'text' : 'default';
   }
 
   // ---- マウス操作 ----
@@ -214,6 +230,8 @@ class MainArea {
       }
       return;
     }
+    // 文字入力中でなければ、ハイパーリンクのクリック（ドラッグしなかった時）で URL を開く
+    const link = modifier ? null : this.linkAt(hit, p);
     this.editor.end();
 
     if (hit) {
@@ -224,7 +242,7 @@ class MainArea {
         this.draw();
         return;
       }
-      this.drag = { type: 'pending', id: hit.id, part: hit.part, start: p, client: { x: e.clientX, y: e.clientY } };
+      this.drag = { type: 'pending', id: hit.id, part: hit.part, link, start: p, client: { x: e.clientX, y: e.clientY } };
     } else if (modifier) {
       this.drag = { type: 'marquee', start: p, current: p, rect: null, candidates: new Set() };
     } else {
@@ -305,7 +323,10 @@ class MainArea {
       case 'pending':
         sel.clear();
         sel.add(d.id);
-        if (d.part === 'inner') this.editor.start(d.id, this.caretAt(d.id, d.start));
+        if (d.link) {
+          window.open(d.link, '_blank', 'noopener');
+          this.draw();
+        } else if (d.part === 'inner') this.editor.start(d.id, this.caretAt(d.id, d.start));
         else this.draw();
         break;
       case 'item':

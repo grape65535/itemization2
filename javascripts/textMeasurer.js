@@ -114,6 +114,20 @@ class TextMeasurer {
     return line.end;
   }
 
+  // 表示行内の x 座標（行頭から）にある文字のオフセット（文字の上でなければ -1）
+  charIndexAt(text, styles, line, x) {
+    if (x < 0) return -1;
+    let acc = 0;
+    let i = line.start;
+    while (i < line.end) {
+      const len = text.codePointAt(i) > 0xffff ? 2 : 1;
+      acc += this.charWidth(text.substr(i, len), styles && styles[i]);
+      if (x < acc) return i;
+      i += len;
+    }
+    return -1;
+  }
+
   // オフセットが属する表示行の番号（折り返し境界は後ろの行の行頭とみなす）
   static lineIndexOf(lines, offset) {
     for (let i = lines.length - 1; i > 0; i--) {
