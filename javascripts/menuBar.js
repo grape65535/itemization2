@@ -38,8 +38,8 @@ class MenuBar {
       {
         label: '表示',
         items: [
-          { label: 'ツリーを全て開く', shortcut: 'Ctrl+E', action: () => app.setTreeCollapsed(false) },
-          { label: 'ツリーを全て閉じる', shortcut: 'Ctrl+Shift+E', action: () => app.setTreeCollapsed(true) },
+          { label: 'ツリーを全て開く', shortcut: ';', action: () => app.setTreeCollapsed(false) },
+          { label: 'ツリーを全て閉じる', shortcut: '-', action: () => app.setTreeCollapsed(true) },
         ],
       },
       {

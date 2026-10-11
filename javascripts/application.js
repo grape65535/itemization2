@@ -530,9 +530,10 @@ class Application {
       e.preventDefault();
       if (e.shiftKey) this.redo();
       else this.undo();
-    } else if (ctrl && !e.altKey && key === 'e') {
+    } else if (!ctrl && !e.altKey && (e.key === ';' || e.key === '-')) {
+      // ; でツリーを全て開く、- でツリーを全て閉じる
       e.preventDefault();
-      this.setTreeCollapsed(e.shiftKey);
+      this.setTreeCollapsed(e.key === '-');
     } else if (ctrl && !e.altKey && !e.shiftKey && key === 'a') {
       e.preventDefault();
       this.selectAll();
