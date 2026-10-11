@@ -100,6 +100,7 @@ const Renderer = {
     ctx.stroke();
 
     const editing = state.editing && state.editing.id === node.id ? state.editing : null;
+    if (node.status) Renderer.drawStatus(ctx, node);
     // 文字背景 → 選択範囲 → 文字 → 下線・取消し線 → カーソルの順に重ねる
     Renderer.eachSegment(node, (seg, x, baseline) => {
       if (!seg.style || !seg.style.bg) return;
@@ -132,6 +133,30 @@ const Renderer = {
         ctx.fillRect(Math.round(editing.caret.x), editing.caret.y, 1, editing.caret.h);
       }
     }
+  },
+
+  // ステータスのバッジ（文字領域の左上。削除されたステータスは白背景・灰色の文字・黒の点線枠）
+  drawStatus(ctx, node) {
+    const C = Config;
+    const s = node.status;
+    const x = node.x + C.paddingX;
+    const y = node.y + C.paddingY;
+    ctx.save();
+    Renderer.roundRectPath(ctx, x + 0.5, y + 0.5, s.w - 1, s.h - 1, s.h / 2 - 0.5);
+    ctx.fillStyle = s.bg;
+    ctx.fill();
+    if (s.orphan) {
+      ctx.setLineDash([2, 2]);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = C.statusOrphan.border;
+      ctx.stroke();
+    }
+    ctx.font = C.statusFont;
+    ctx.fillStyle = s.fg;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.fillText(s.name, x + s.w / 2, y + s.h / 2 + 0.5);
+    ctx.restore();
   },
 
   // 表示行の区間ごとに fn(segment, 左端の x, ベースラインの y) を呼ぶ（座標はコンテンツ座標）

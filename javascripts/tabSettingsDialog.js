@@ -122,6 +122,8 @@ class TabSettingsDialog {
     name.maxLength = Config.statusNameMax;
     name.placeholder = `1〜${Config.statusNameMax} 文字`;
     name.value = status.name;
+    // 設定済みのステータスの元の名前（名前を変えたら、そのステータスのアイテムの表示も変える）
+    if (status.name) row.dataset.original = status.name;
     const color = Util.el('select', 'settings-select');
     for (const c of Config.statusColors) {
       const option = Util.el('option', '', c.name);
@@ -156,23 +158,32 @@ class TabSettingsDialog {
     this.addButton.disabled = this.statusList.children.length >= Config.statusMax;
   }
 
-  // 入力を検証して反映する（ステータス名は前後の空白を除いて 1〜12 文字）
+  // 入力を検証して反映する（ステータス名は前後の空白を除いて 1〜12 文字で、重複しないこと）
   submit(parentAlign, maxWidth) {
     const statuses = [];
+    const renames = new Map(); // 元の名前 -> 新しい名前
+    const seen = new Set();
     let invalid = null;
+    let message = '';
     for (const row of this.statusList.children) {
       const input = row.querySelector('input');
       const name = input.value.trim();
       const length = Array.from(name).length;
-      if (length < 1 || length > Config.statusNameMax) {
+      let error = '';
+      if (length < 1 || length > Config.statusNameMax) error = `ステータス名は 1〜${Config.statusNameMax} 文字で入力してください`;
+      else if (seen.has(name)) error = `同じステータス名「${name}」は登録できません`;
+      seen.add(name);
+      if (error) {
         input.classList.add('invalid');
         invalid = invalid || input;
+        message = message || error;
         continue;
       }
       statuses.push({ name, color: row.querySelector('select').value });
+      if (row.dataset.original && row.dataset.original !== name) renames.set(row.dataset.original, name);
     }
     if (invalid) {
-      this.error.textContent = `ステータス名は 1〜${Config.statusNameMax} 文字で入力してください`;
+      this.error.textContent = message;
       invalid.focus();
       return;
     }
@@ -181,7 +192,14 @@ class TabSettingsDialog {
     this.close();
     this.app.commit((doc) => {
       const tab = doc.tabs.find((t) => t.id === tabId);
-      if (tab) tab.options = options;
+      if (!tab) return { tabId };
+      tab.options = options;
+      // 名前を変えたステータスは、そのタブのアイテムの表示名も変える（削除したステータスはアイテムに残す）
+      const walk = (item) => {
+        if (item.status && renames.has(item.status)) item.status = renames.get(item.status);
+        item.children.forEach(walk);
+      };
+      if (renames.size) walk(tab.root);
       return { tabId };
     }, { tabId });
   }

@@ -19,13 +19,20 @@ const TreeLayout = {
       const text = src.text;
       const styles = src === item ? RichText.toArray(text, item.spans) : RichText.fit(src.styles, text.length);
       const lines = measurer.wrap(text, maxWidth, styles);
-      let contentWidth = C.minContentWidth;
+      // ステータスのバッジ（文字領域の左上。文字列はその下から始める）
+      let status = null;
+      if (item.status) {
+        status = Model.statusLook(options, item.status);
+        status.w = Math.ceil(measurer.textWidth(item.status, C.statusFont)) + C.statusPaddingX * 2;
+        status.h = C.statusHeight;
+      }
+      let contentWidth = Math.max(C.minContentWidth, status ? status.w : 0);
       for (const line of lines) contentWidth = Math.max(contentWidth, line.width);
       contentWidth = Math.ceil(contentWidth);
       // 行の縦位置と、寄せ方による横位置（文字領域の左端から）
       const align = src.align === 'center' || src.align === 'right' ? src.align : 'left';
       const factor = align === 'center' ? 0.5 : align === 'right' ? 1 : 0;
-      let contentHeight = 0;
+      let contentHeight = status ? status.h + C.statusGap : 0;
       for (const line of lines) {
         line.top = contentHeight;
         line.x = (contentWidth - line.width) * factor;
@@ -39,6 +46,7 @@ const TreeLayout = {
         lines,
         fill: src.fill || null,
         align,
+        status,
         depth,
         parentId,
         contentWidth,

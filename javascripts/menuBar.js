@@ -30,6 +30,9 @@ class MenuBar {
           { label: 'ツリーとしてコピー', action: () => app.copyAs('tree'), enabled: () => app.selectedIds().length > 0 },
           { label: 'CSVとしてコピー', action: () => app.copyAs('csv'), enabled: () => app.selectedIds().length > 0 },
           { label: 'TSVとしてコピー', action: () => app.copyAs('tsv'), enabled: () => app.selectedIds().length > 0 },
+          { separator: true },
+          { label: 'ステータスを設定', submenu: () => app.statusMenuItems(), enabled: () => app.selectedIds().length > 0 },
+          { label: 'ステータスを削除', action: () => app.clearStatus(), enabled: () => app.selectedHasStatus() },
         ],
       },
       {
@@ -82,18 +85,62 @@ class MenuBar {
         continue;
       }
       const item = Util.el('button', 'menu-item');
-      item.append(Util.el('span', 'menu-item-label', def.label), Util.el('span', 'menu-item-shortcut', def.shortcut || ''));
+      item.append(Util.el('span', 'menu-item-label', def.label), Util.el('span', 'menu-item-shortcut', def.submenu ? '▶︎' : def.shortcut || ''));
       item.disabled = def.enabled ? !def.enabled() : false;
-      item.addEventListener('click', () => {
-        this.closeAll();
-        def.action();
-      });
+      if (def.submenu) {
+        // マウスを置くとサブメニューを右に開く
+        item.classList.add('has-submenu');
+        item.addEventListener('mouseenter', () => this.openSubmenu(menu, item, def));
+        item.addEventListener('click', () => this.openSubmenu(menu, item, def));
+      } else {
+        item.addEventListener('click', () => {
+          this.closeAll();
+          def.action();
+        });
+        item.addEventListener('mouseenter', () => this.closeSubmenu());
+      }
       menu.dropdown.append(item);
     }
     menu.el.classList.add('open');
   }
 
+  // サブメニュー: def.submenu() の [{ label, badge?, action, enabled? }] を表示する（無効なら開かない）
+  openSubmenu(menu, item, def) {
+    if (this.submenu && this.submenu.item === item) return;
+    this.closeSubmenu();
+    if (item.disabled) return;
+    const el = Util.el('div', 'menu-dropdown menu-submenu');
+    const entries = def.submenu();
+    if (entries.length === 0) {
+      const empty = Util.el('button', 'menu-item', '（ステータスが登録されていません）');
+      empty.disabled = true;
+      el.append(empty);
+    }
+    for (const entry of entries) {
+      const sub = Util.el('button', 'menu-item');
+      sub.append(entry.badge || Util.el('span', 'menu-item-label', entry.label));
+      sub.disabled = entry.enabled ? !entry.enabled() : false;
+      sub.addEventListener('click', () => {
+        this.closeAll();
+        entry.action();
+      });
+      el.append(sub);
+    }
+    el.style.top = item.offsetTop - 4 + 'px';
+    menu.dropdown.append(el);
+    item.classList.add('submenu-open');
+    this.submenu = { item, el };
+  }
+
+  closeSubmenu() {
+    if (!this.submenu) return;
+    this.submenu.el.remove();
+    this.submenu.item.classList.remove('submenu-open');
+    this.submenu = null;
+  }
+
   closeAll() {
+    this.closeSubmenu();
     if (!this.openMenu) return false;
     this.openMenu.el.classList.remove('open');
     this.openMenu = null;

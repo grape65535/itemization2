@@ -108,6 +108,18 @@ body.tab-dragging * {
   cursor: default;
 }
 
+.menu-submenu {
+  display: block;
+  top: 0;
+  left: 100%;
+  min-width: 160px;
+  margin-left: 2px;
+}
+
+.menu-item.submenu-open {
+  background: #e6efff;
+}
+
 .menu-item-shortcut {
   color: #888;
   font-size: 12px;

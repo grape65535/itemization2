@@ -24,6 +24,12 @@ class TextMeasurer {
     return w;
   }
 
+  // 任意のフォントでの文字列の幅
+  textWidth(text, font) {
+    this.ctx.font = font;
+    return this.ctx.measureText(text).width;
+  }
+
   // 表示行に分割する。styles は文字ごとのスタイル（省略時は装飾なし）。
   // 戻り値: [{ start, end, width, height, baseline, segments: [{ start, end, x, width, style }] }]
   //   start/end は UTF-16 オフセット（改行文字は含まない）、baseline は行の上端から、segment.x は行頭から

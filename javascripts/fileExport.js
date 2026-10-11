@@ -77,7 +77,8 @@ const FileExport = {
       Renderer.eachSegment(node, (seg, x, baseline) => {
         segments.push({ text: node.text.slice(seg.start, seg.end), x, y: baseline, width: seg.width, style: seg.style });
       });
-      items.push({ x: node.x, y: node.y, w: node.w, h: node.h, fill: node.fill, segments });
+      const status = node.status && Object.assign({ x: node.x + C.paddingX, y: node.y + C.paddingY }, node.status);
+      items.push({ x: node.x, y: node.y, w: node.w, h: node.h, fill: node.fill, status, segments });
     }
     return { width: Math.ceil(layout.width), height: Math.ceil(layout.height), connectors, items };
   },
@@ -115,6 +116,13 @@ const FileExport = {
     for (const it of scene.items) {
       out.push(`<rect x="${it.x + 0.5}" y="${it.y + 0.5}" width="${it.w - 1}" height="${it.h - 1}" rx="${C.cornerRadius}" ` +
         `fill="${it.fill || col.itemFill}" stroke="${col.itemBorder}" stroke-width="1"/>`);
+      const st = it.status;
+      if (st) {
+        const dash = st.orphan ? ` stroke="${C.statusOrphan.border}" stroke-width="1" stroke-dasharray="2 2"` : '';
+        out.push(`<rect x="${st.x + 0.5}" y="${st.y + 0.5}" width="${st.w - 1}" height="${st.h - 1}" rx="${st.h / 2 - 0.5}" fill="${st.bg}"${dash}/>`);
+        out.push(`<text x="${st.x + st.w / 2}" y="${st.y + st.h / 2 + C.statusFontSize * 0.35}" font-family="sans-serif" ` +
+          `font-size="${C.statusFontSize}" font-weight="bold" text-anchor="middle" fill="${st.fg}">${esc(st.name)}</text>`);
+      }
       // 文字背景 → 文字 → 下線・取消し線（CANVAS と同じ順・位置）
       for (const seg of it.segments) {
         if (!seg.style || !seg.style.bg) continue;
@@ -205,6 +213,20 @@ const FileExport = {
         Object.assign({ color: hex(it.fill || col.itemFill), borderColor: hex(col.itemBorder), borderWidth: k }, svgOpts));
       // 矩形（コンテンツ座標）を PDF の座標で塗る
       const fillRect = (x, y, w, h, color) => page.drawRectangle({ x: x * k, y: (H - y - h) * k, width: w * k, height: h * k, color: hex(color) });
+      const st = it.status;
+      if (st) {
+        const opts = { color: hex(st.bg) };
+        if (st.orphan) Object.assign(opts, { borderColor: hex(C.statusOrphan.border), borderWidth: k, borderDashArray: [2 * k, 2 * k] });
+        page.drawSvgPath(FileExport.roundRectPath(st.x + 0.5, st.y + 0.5, st.w - 1, st.h - 1, st.h / 2 - 0.5), Object.assign(opts, svgOpts));
+        let size = C.statusFontSize * k;
+        const width = font.widthOfTextAtSize(st.name, size);
+        const maxWidth = (st.w - C.statusPaddingX * 2) * k;
+        if (width > maxWidth) size *= maxWidth / width;
+        const textWidth = font.widthOfTextAtSize(st.name, size);
+        const drawn = { x: (st.x + st.w / 2) * k - textWidth / 2, y: (H - st.y - st.h / 2 - C.statusFontSize * 0.35) * k, size, font, color: hex(st.fg) };
+        page.drawText(st.name, drawn);
+        page.drawText(st.name, Object.assign({}, drawn, { x: drawn.x + size * 0.04 }));
+      }
       for (const seg of it.segments) {
         if (!seg.style || !seg.style.bg) continue;
         const d = RichText.decoration(seg.style, seg.y);
