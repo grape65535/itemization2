@@ -430,8 +430,19 @@ class ItemEditor {
   }
 
   // ツールバーで操作できる装飾（文字の装飾・アイテム背景色・寄せ方）をアイテム全体から消す
+  // 文字を選択中なら、選択中の文字列の文字単位の装飾だけを消す（アイテム背景色・寄せ方はそのまま）
   clearDecoration() {
     if (this.editingId === null) return;
+    const s = this.ta.selectionStart;
+    const e = this.ta.selectionEnd;
+    if (s < e) {
+      const current = RichText.fit(this.styles, this.ta.value.length);
+      if (current.slice(s, e).every((st) => st === null)) return;
+      this.pushUndo();
+      this.styles = current.slice(0, s).concat(new Array(e - s).fill(null), current.slice(e));
+      this.decorated();
+      return;
+    }
     const styles = new Array(this.ta.value.length).fill(null);
     if (this.fill === null && this.align === 'left' && this.styles.every((s) => s === null)) return;
     this.pushUndo();
