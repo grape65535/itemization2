@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.1.9',
+  version: 'v2.1.10',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',

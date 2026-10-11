@@ -383,7 +383,8 @@ class MainArea {
     for (const n of this.layout.order) {
       const ow = Math.min(x2, n.x + n.w) - Math.max(x1, n.x);
       const oh = Math.min(y2, n.y + n.h) - Math.max(y1, n.y);
-      if (ow > 0 && oh > 0 && ow * oh * 2 >= n.w * n.h) d.candidates.add(n.id);
+      // 面積の 25% 以上が範囲内のアイテムを候補にする
+      if (ow > 0 && oh > 0 && ow * oh * 4 >= n.w * n.h) d.candidates.add(n.id);
     }
   }
 
