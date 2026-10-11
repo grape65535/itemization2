@@ -1,6 +1,6 @@
 'use strict';
 
-// ヘッダのメニュー（ファイル・編集・表示・オプション）
+// ヘッダのメニュー（ファイル・編集・表示・オプション）と、アイテムの右クリックメニュー
 class MenuBar {
   constructor(app, container) {
     this.app = app;
@@ -50,6 +50,10 @@ class MenuBar {
       },
     ];
     this.openMenu = null;
+    // アイテムの右クリックメニュー（項目は編集メニューと共通）
+    const editItems = this.menus.find((m) => m.label === '編集').items;
+    const pick = (label) => editItems.find((d) => d.label === label);
+    this.contextItems = [pick('コピー'), pick('切り取り'), pick('貼り付け'), { separator: true }, pick('ステータスを設定'), pick('ステータスを削除')];
 
     for (const menu of this.menus) {
       const el = Util.el('div', 'menu');
@@ -104,6 +108,20 @@ class MenuBar {
     menu.el.classList.add('open');
   }
 
+  // 右クリックメニューを画面座標 (x, y) に開く（画面からはみ出す場合は内側へずらす）
+  openContext(x, y) {
+    this.closeAll();
+    const el = Util.el('div', 'menu context-menu');
+    const dropdown = Util.el('div', 'menu-dropdown');
+    el.append(dropdown);
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.body.append(el);
+    this.open({ el, dropdown, items: this.contextItems, context: true });
+    const r = dropdown.getBoundingClientRect();
+    el.style.left = Math.max(0, Math.min(x, window.innerWidth - r.width - 4)) + 'px';
+    el.style.top = Math.max(0, Math.min(y, window.innerHeight - r.height - 4)) + 'px';
+  }
+
   // サブメニュー: def.submenu() の [{ label, badge?, action, enabled? }] を表示する（無効なら開かない）
   openSubmenu(menu, item, def) {
     if (this.submenu && this.submenu.item === item) return;
@@ -128,6 +146,15 @@ class MenuBar {
     }
     el.style.top = item.offsetTop - 4 + 'px';
     menu.dropdown.append(el);
+    // 画面の右・下からはみ出す場合は左側に開く・上へずらす
+    const r = el.getBoundingClientRect();
+    if (r.right > window.innerWidth) {
+      el.style.left = 'auto';
+      el.style.right = '100%';
+      el.style.marginLeft = '0';
+      el.style.marginRight = '2px';
+    }
+    if (r.bottom > window.innerHeight) el.style.top = item.offsetTop - 4 - (r.bottom - window.innerHeight + 4) + 'px';
     item.classList.add('submenu-open');
     this.submenu = { item, el };
   }
@@ -143,6 +170,7 @@ class MenuBar {
     this.closeSubmenu();
     if (!this.openMenu) return false;
     this.openMenu.el.classList.remove('open');
+    if (this.openMenu.context) this.openMenu.el.remove();
     this.openMenu = null;
     return true;
   }

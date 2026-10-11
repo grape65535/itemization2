@@ -108,6 +108,17 @@ body.tab-dragging * {
   cursor: default;
 }
 
+.context-menu {
+  position: fixed;
+  z-index: 50;
+  color: #222;
+}
+
+.context-menu > .menu-dropdown {
+  top: 0;
+  left: 0;
+}
+
 .menu-submenu {
   display: block;
   top: 0;

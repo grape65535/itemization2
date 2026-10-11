@@ -46,6 +46,7 @@ class MainArea {
         this.suppressContextMenu = false;
       }
     });
+    this.scroller.addEventListener('contextmenu', (e) => this.onContextMenu(e));
     window.addEventListener('resize', () => this.render());
   }
 
@@ -232,6 +233,28 @@ class MainArea {
         scroll: { x: this.scroller.scrollLeft, y: this.scroller.scrollTop }, moved: false,
       };
     }
+  }
+
+  // アイテム上の右クリック：左クリックと同様に選択してから（未選択なら選択、SHIFT/CTRL なら選択に追加）右クリックメニューを開く
+  onContextMenu(e) {
+    if (e.defaultPrevented || !this.layout || this.toolbar.el.contains(e.target)) return;
+    const hit = this.hitTest(this.toContent(e));
+    if (!hit || hit.type !== 'item') return;
+    e.preventDefault();
+    this.drag = null;
+    this.toolbar.closePopup();
+    this.editor.end();
+    const sel = this.app.selection;
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      // 選択の解除はせず、末尾（最後に選択したアイテム）に追加する
+      sel.delete(hit.id);
+      sel.add(hit.id);
+    } else if (!sel.has(hit.id)) {
+      sel.clear();
+      sel.add(hit.id);
+    }
+    this.draw();
+    this.app.menuBar.openContext(e.clientX, e.clientY);
   }
 
   onMouseMove(e) {

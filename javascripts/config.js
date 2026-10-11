@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.1.6',
+  version: 'v2.1.7',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',
@@ -74,10 +74,10 @@ const Config = {
     { key: 'darkred', name: '深紅', bg: '#b02a2a', fg: '#ffffff' },
   ],
   // アイテムに表示するステータスのバッジ（左上）
-  statusFont: 'bold 8px system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif',
-  statusFontSize: 8,
-  statusHeight: 12,
-  statusPaddingX: 5,
+  statusFont: 'bold 10px system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Meiryo", sans-serif',
+  statusFontSize: 10,
+  statusHeight: 15,
+  statusPaddingX: 6,
   statusGap: 3, // バッジと文字列の間隔
   // タブの設定から削除されたステータス（白背景・灰色の文字・黒の点線枠）
   statusOrphan: { bg: '#ffffff', fg: '#808080', border: '#000000' },
