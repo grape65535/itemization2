@@ -246,6 +246,34 @@ class Application {
     }, { itemId: ids[0] });
   }
 
+  // 「アイテムを追加」：選択中の 1 つのアイテムの最初の子（first）・最後の子（last）・前（before）・後（after）に
+  // 空のアイテムを新設して文字入力にする（子として追加する時は展開する。ルートの前後には追加しない）
+  addItem(kind) {
+    this.editor.end();
+    const ids = this.selectedIds();
+    if (ids.length !== 1) return;
+    const id = ids[0];
+    let newId = null;
+    this.commit((doc) => {
+      const loc = Model.locate(doc, id);
+      if (!loc || (!loc.parent && (kind === 'before' || kind === 'after'))) return null;
+      const item = Model.createItem('');
+      newId = item.id;
+      if (kind === 'first' || kind === 'last') {
+        loc.item.collapsed = false;
+        if (kind === 'first') loc.item.children.unshift(item);
+        else loc.item.children.push(item);
+      } else {
+        loc.parent.children.splice(loc.index + (kind === 'after' ? 1 : 0), 0, item);
+      }
+      return { itemId: newId };
+    }, { itemId: id });
+    if (!newId) return;
+    this.selection.clear();
+    this.editor.start(newId, 0);
+    this.mainArea.scrollIntoView(newId);
+  }
+
   // 選択中のアイテムを削除し、子をその位置に繰り上げる（ルートは削除しない）
   deleteSelected() {
     const ids = [...this.selection]

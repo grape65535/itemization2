@@ -22,14 +22,34 @@ class MenuBar {
           { separator: true },
           { label: '全て選択', shortcut: 'Ctrl+A', action: () => app.selectAll() },
           { label: 'コピー', shortcut: 'Ctrl+C', action: () => app.menuCopy(false), enabled: () => app.selectedIds().length > 0 },
+          {
+            label: '形式を指定してコピー',
+            enabled: () => app.selectedIds().length > 0,
+            submenu: () => [
+              { label: '番号付き箇条書きとしてコピー', action: () => app.copyAs('numbered') },
+              { label: 'マークダウンとしてコピー', action: () => app.copyAs('markdown') },
+              { label: 'ツリーとしてコピー', action: () => app.copyAs('tree') },
+              { label: 'CSVとしてコピー', action: () => app.copyAs('csv') },
+              { label: 'TSVとしてコピー', action: () => app.copyAs('tsv') },
+            ],
+          },
           { label: '切り取り', shortcut: 'Ctrl+X', action: () => app.menuCopy(true), enabled: () => app.selectedIds().length > 0 },
           { label: '貼り付け', shortcut: 'Ctrl+V', action: () => app.menuPaste() },
           { separator: true },
-          { label: '番号付き箇条書きとしてコピー', action: () => app.copyAs('numbered'), enabled: () => app.selectedIds().length > 0 },
-          { label: 'マークダウンとしてコピー', action: () => app.copyAs('markdown'), enabled: () => app.selectedIds().length > 0 },
-          { label: 'ツリーとしてコピー', action: () => app.copyAs('tree'), enabled: () => app.selectedIds().length > 0 },
-          { label: 'CSVとしてコピー', action: () => app.copyAs('csv'), enabled: () => app.selectedIds().length > 0 },
-          { label: 'TSVとしてコピー', action: () => app.copyAs('tsv'), enabled: () => app.selectedIds().length > 0 },
+          {
+            label: 'アイテムを追加',
+            enabled: () => app.selectedIds().length === 1,
+            submenu: () => {
+              const isRoot = () => !app.index.get(app.selectedIds()[0]).parent; // ルートには兄弟を追加できない
+              return [
+                { label: '最初の子として追加', action: () => app.addItem('first') },
+                { label: '最後の子として追加', action: () => app.addItem('last') },
+                { label: '前に追加', action: () => app.addItem('before'), enabled: () => !isRoot() },
+                { label: '後に追加', action: () => app.addItem('after'), enabled: () => !isRoot() },
+              ];
+            },
+          },
+          { label: 'アイテムを削除', action: () => app.deleteSelected(), enabled: () => app.selectedIds().length > 0 },
           { separator: true },
           { label: 'ステータスを設定', submenu: () => app.statusMenuItems(), enabled: () => app.selectedIds().length > 0 },
           { label: 'ステータスを削除', action: () => app.clearStatus(), enabled: () => app.selectedHasStatus() },
