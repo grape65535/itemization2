@@ -22,17 +22,40 @@ class MenuBar {
           { separator: true },
           { label: '全て選択', shortcut: 'Ctrl+A', action: () => app.selectAll() },
           { label: 'コピー', shortcut: 'Ctrl+C', action: () => app.menuCopy(false), enabled: () => app.selectedIds().length > 0 },
+          {
+            label: '形式を指定してコピー',
+            enabled: () => app.selectedIds().length > 0,
+            submenu: () => [
+              { label: '番号付き箇条書きとしてコピー', action: () => app.copyAs('numbered') },
+              { label: 'マークダウンとしてコピー', action: () => app.copyAs('markdown') },
+              { label: 'ツリーとしてコピー', action: () => app.copyAs('tree') },
+              { label: 'CSVとしてコピー', action: () => app.copyAs('csv') },
+              { label: 'TSVとしてコピー', action: () => app.copyAs('tsv') },
+            ],
+          },
           { label: '切り取り', shortcut: 'Ctrl+X', action: () => app.menuCopy(true), enabled: () => app.selectedIds().length > 0 },
           { label: '貼り付け', shortcut: 'Ctrl+V', action: () => app.menuPaste() },
           { separator: true },
-          { label: '番号付き箇条書きとしてコピー', action: () => app.copyAs('numbered'), enabled: () => app.selectedIds().length > 0 },
-          { label: 'マークダウンとしてコピー', action: () => app.copyAs('markdown'), enabled: () => app.selectedIds().length > 0 },
-          { label: 'ツリーとしてコピー', action: () => app.copyAs('tree'), enabled: () => app.selectedIds().length > 0 },
-          { label: 'CSVとしてコピー', action: () => app.copyAs('csv'), enabled: () => app.selectedIds().length > 0 },
-          { label: 'TSVとしてコピー', action: () => app.copyAs('tsv'), enabled: () => app.selectedIds().length > 0 },
+          {
+            label: 'アイテムを追加',
+            enabled: () => app.selectedIds().length === 1,
+            submenu: () => {
+              const isRoot = () => !app.index.get(app.selectedIds()[0]).parent; // ルートには兄弟を追加できない
+              return [
+                { label: '最初の子として追加', action: () => app.addItem('first') },
+                { label: '最後の子として追加', action: () => app.addItem('last') },
+                { label: '前に追加', action: () => app.addItem('before'), enabled: () => !isRoot() },
+                { label: '後に追加', action: () => app.addItem('after'), enabled: () => !isRoot() },
+              ];
+            },
+          },
+          { label: 'アイテムを削除', action: () => app.deleteSelected(), enabled: () => app.selectedIds().length > 0 },
           { separator: true },
           { label: 'ステータスを設定', submenu: () => app.statusMenuItems(), enabled: () => app.selectedIds().length > 0 },
           { label: 'ステータスを削除', action: () => app.clearStatus(), enabled: () => app.selectedHasStatus() },
+          { separator: true },
+          { label: 'フィルタを設定', action: () => app.filterDialog.open() },
+          { label: 'フィルタを削除', action: () => app.clearFilter(), enabled: () => app.activeFilter !== null },
         ],
       },
       {
@@ -53,7 +76,14 @@ class MenuBar {
     // アイテムの右クリックメニュー（項目は編集メニューと共通）
     const editItems = this.menus.find((m) => m.label === '編集').items;
     const pick = (label) => editItems.find((d) => d.label === label);
-    this.contextItems = [pick('コピー'), pick('切り取り'), pick('貼り付け'), { separator: true }, pick('ステータスを設定'), pick('ステータスを削除')];
+    this.contextItems = [
+      pick('コピー'), pick('切り取り'), pick('貼り付け'), { separator: true },
+      pick('アイテムを追加'), pick('アイテムを削除'), { separator: true },
+      pick('ステータスを設定'), pick('ステータスを削除'), { separator: true },
+      pick('フィルタを設定'), pick('フィルタを削除'),
+    ];
+    // アイテム外の右クリックメニュー
+    this.contextOutsideItems = [pick('フィルタを設定'), pick('フィルタを削除')];
 
     for (const menu of this.menus) {
       const el = Util.el('div', 'menu');
@@ -108,15 +138,15 @@ class MenuBar {
     menu.el.classList.add('open');
   }
 
-  // 右クリックメニューを画面座標 (x, y) に開く（画面からはみ出す場合は内側へずらす）
-  openContext(x, y) {
+  // 右クリックメニューを画面座標 (x, y) に開く（画面からはみ出す場合は内側へずらす）。outside: アイテム外のメニュー
+  openContext(x, y, outside) {
     this.closeAll();
     const el = Util.el('div', 'menu context-menu');
     const dropdown = Util.el('div', 'menu-dropdown');
     el.append(dropdown);
     el.addEventListener('contextmenu', (e) => e.preventDefault());
     document.body.append(el);
-    this.open({ el, dropdown, items: this.contextItems, context: true });
+    this.open({ el, dropdown, items: outside ? this.contextOutsideItems : this.contextItems, context: true });
     const r = dropdown.getBoundingClientRect();
     el.style.left = Math.max(0, Math.min(x, window.innerWidth - r.width - 4)) + 'px';
     el.style.top = Math.max(0, Math.min(y, window.innerHeight - r.height - 4)) + 'px';

@@ -32,7 +32,7 @@ class TabSettingsDialog {
     const C = Config;
 
     this.overlay = Util.el('div', 'modal-overlay');
-    const dialog = Util.el('div', 'modal-dialog');
+    const dialog = Util.el('div', 'modal-dialog tab-settings-dialog');
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
     dialog.setAttribute('aria-label', 'タブの設定');
@@ -48,7 +48,15 @@ class TabSettingsDialog {
       alignSelect.append(option);
     }
     alignSelect.value = options.parentAlign;
-    body.append(this.field('親アイテムの縦表示位置', alignSelect));
+    // スクロールに追従する（プルダウンの位置を初期位置とする）
+    const followLabel = Util.el('label', 'settings-check');
+    const followInput = Util.el('input');
+    followInput.type = 'checkbox';
+    followInput.checked = options.followScroll;
+    followLabel.append(followInput, Util.el('span', '', 'スクロールに追従する'));
+    const alignWrap = Util.el('div', 'settings-inline');
+    alignWrap.append(alignSelect, followLabel);
+    body.append(this.field('親アイテムの縦表示位置', alignWrap));
 
     // アイテムの最大表示幅
     const widthWrap = Util.el('div', 'settings-range');
@@ -91,7 +99,7 @@ class TabSettingsDialog {
     const ok = Util.el('button', 'settings-button primary', 'OK');
     ok.type = 'button';
     cancel.addEventListener('click', () => this.close());
-    ok.addEventListener('click', () => this.submit(alignSelect.value, Number(widthInput.value)));
+    ok.addEventListener('click', () => this.submit(alignSelect.value, followInput.checked, Number(widthInput.value)));
     footer.append(cancel, ok);
 
     dialog.append(title, body, footer);
@@ -193,7 +201,7 @@ class TabSettingsDialog {
   }
 
   // 入力を検証して反映する（ステータス名は前後の空白を除いて 1〜12 文字で、重複しないこと）
-  submit(parentAlign, maxWidth) {
+  submit(parentAlign, followScroll, maxWidth) {
     const statuses = [];
     const renames = new Map(); // 元の名前 -> 新しい名前
     const seen = new Set();
@@ -222,7 +230,7 @@ class TabSettingsDialog {
       return;
     }
     const tabId = this.tabId;
-    const options = Model.normalizeOptions({ parentAlign, maxWidth, statuses });
+    const options = Model.normalizeOptions({ parentAlign, followScroll, maxWidth, statuses });
     this.close();
     this.app.commit((doc) => {
       const tab = doc.tabs.find((t) => t.id === tabId);
@@ -234,6 +242,8 @@ class TabSettingsDialog {
         item.children.forEach(walk);
       };
       if (renames.size) walk(tab.root);
+      // フィルタの「表示しないステータス」も新しい名前にする
+      if (renames.size && tab.filter) tab.filter.hideStatuses = tab.filter.hideStatuses.map((n) => renames.get(n) || n);
       return { tabId };
     }, { tabId });
   }

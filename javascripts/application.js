@@ -4,6 +4,12 @@
 class Application {
   constructor(rootEl) {
     this.doc = Storage.loadDocument() || Model.createDocument();
+    this.filters = new Map(); // タブ ID -> フィルタ中の表示 { key: 条件, hidden: [+] で隠すアイテムの ID の Set }（[+] の展開状態は保存しない）
+    // 再読み込み前にフィルタ中だったタブは、記録した条件でフィルタをかけた状態から始める
+    if (this.doc.tabs.some((t) => t.filter && t.filter.active)) {
+      this.refilterTabs(this.doc.tabs);
+      Storage.saveDocument(JSON.stringify(this.doc));
+    }
     this.reindex();
     const ui = Storage.loadUi();
     this.activeTabId = this.findTab(ui.activeTabId) ? ui.activeTabId : this.doc.tabs[0].id;
@@ -24,6 +30,8 @@ class Application {
     this.tabBar = new TabBar(this, tabBar);
     this.mainArea = new MainArea(this, main);
     this.tabSettings = new TabSettingsDialog(this);
+    this.filterDialog = new FilterDialog(this);
+    this.filterCondition = null; // 最後に適用したフィルタの条件 { text, ignoreCase, regex }（タブに条件が無い時のダイアログの初期値）
 
     // ファイルを開く（OS 標準のダイアログ）・画面へのドロップ
     this.fileInput = Util.el('input', 'file-input');
@@ -90,7 +98,7 @@ class Application {
     const ids = [];
     for (const id of this.selection) {
       const entry = this.index.get(id);
-      if (!entry || !entry.parent || entry.tab.id !== this.activeTabId) continue;
+      if (!entry || !entry.parent || entry.tab.id !== this.activeTabId || this.isFilteredOut(id)) continue;
       let ancestorSelected = false;
       for (let e = this.index.get(entry.parent.id); e; e = e.parent && this.index.get(e.parent.id)) {
         if (this.selection.has(e.item.id)) {
@@ -112,6 +120,7 @@ class Application {
     const beforeHint = { tabId: hint.tabId || this.activeTabId, itemId: hint.itemId || null };
     const result = fn(this.doc) || {};
     this.reindex();
+    this.syncFilters();
     const after = JSON.stringify(this.doc);
     if (before === after) return false;
     this.history.push({
@@ -141,6 +150,7 @@ class Application {
   restore(json, hint) {
     this.doc = JSON.parse(json);
     this.reindex();
+    this.syncFilters();
     if (hint.tabId && this.findTab(hint.tabId)) this.setActiveTab(hint.tabId);
     else if (!this.activeTab) this.setActiveTab(this.doc.tabs[0].id);
     for (const id of [...this.selection]) {
@@ -226,7 +236,8 @@ class Application {
       });
       const t = Model.locate(doc, target.id);
       if (target.mode === 'child') {
-        t.item.collapsed = false;
+        // 子のあるアイテムが折り畳み中なら折り畳んだまま（子が無ければ、移動したアイテムが見えるよう展開する）
+        if (t.item.children.length === 0) t.item.collapsed = false;
         t.item.children.push(...items);
       } else {
         t.parent.children.splice(t.index + (target.mode === 'after' ? 1 : 0), 0, ...items);
@@ -235,12 +246,40 @@ class Application {
     }, { itemId: ids[0] });
   }
 
+  // 「アイテムを追加」：選択中の 1 つのアイテムの最初の子（first）・最後の子（last）・前（before）・後（after）に
+  // 空のアイテムを新設して文字入力にする（子として追加する時は展開する。ルートの前後には追加しない）
+  addItem(kind) {
+    this.editor.end();
+    const ids = this.selectedIds();
+    if (ids.length !== 1) return;
+    const id = ids[0];
+    let newId = null;
+    this.commit((doc) => {
+      const loc = Model.locate(doc, id);
+      if (!loc || (!loc.parent && (kind === 'before' || kind === 'after'))) return null;
+      const item = Model.createItem('');
+      newId = item.id;
+      if (kind === 'first' || kind === 'last') {
+        loc.item.collapsed = false;
+        if (kind === 'first') loc.item.children.unshift(item);
+        else loc.item.children.push(item);
+      } else {
+        loc.parent.children.splice(loc.index + (kind === 'after' ? 1 : 0), 0, item);
+      }
+      return { itemId: newId };
+    }, { itemId: id });
+    if (!newId) return;
+    this.selection.clear();
+    this.editor.start(newId, 0);
+    this.mainArea.scrollIntoView(newId);
+  }
+
   // 選択中のアイテムを削除し、子をその位置に繰り上げる（ルートは削除しない）
   deleteSelected() {
     const ids = [...this.selection]
       .filter((id) => {
         const entry = this.index.get(id);
-        return entry && entry.parent && entry.tab.id === this.activeTabId;
+        return entry && entry.parent && entry.tab.id === this.activeTabId && !this.isFilteredOut(id);
       })
       .sort((a, b) => this.index.get(a).order - this.index.get(b).order);
     if (ids.length === 0) return;
@@ -282,6 +321,7 @@ class Application {
       }
       this.finishInput();
       this.commit((doc) => {
+        this.refilterTabs(tabs); // フィルタ中で保存されたタブは、フィルタをかけた状態で開く
         doc.tabs.push(...tabs);
         this.setActiveTab(tabs[tabs.length - 1].id);
         return { tabId: this.activeTabId };
@@ -300,7 +340,7 @@ class Application {
   saveSvg() {
     this.finishInput();
     const tab = this.activeTab;
-    const svg = FileExport.buildSvg(FileExport.scene(this.mainArea.layout), FileExport.tabJson(tab));
+    const svg = FileExport.buildSvg(this.mainArea.exportScene(), FileExport.tabJson(tab));
     FileExport.download(new Blob([svg], { type: 'image/svg+xml' }), FileExport.fileName(this.tabTitle(tab), '.svg'));
   }
 
@@ -308,7 +348,7 @@ class Application {
   async savePdf() {
     this.finishInput();
     const tab = this.activeTab;
-    const scene = FileExport.scene(this.mainArea.layout);
+    const scene = this.mainArea.exportScene();
     document.body.classList.add('busy');
     try {
       const bytes = await FileExport.buildPdf(scene);
@@ -370,12 +410,12 @@ class Application {
 
   // ---- 全て選択・コピー・切り取り・貼り付け ----
 
-  // アクティブタブ内の選択中アイテム（文書順）
+  // アクティブタブ内の選択中アイテム（文書順。フィルタで隠れたアイテムは除く）
   selectedIds() {
     return [...this.selection]
       .filter((id) => {
         const entry = this.index.get(id);
-        return entry && entry.tab.id === this.activeTabId;
+        return entry && entry.tab.id === this.activeTabId && !this.isFilteredOut(id);
       })
       .sort((a, b) => this.index.get(a).order - this.index.get(b).order);
   }
@@ -383,7 +423,9 @@ class Application {
   selectAll() {
     this.editor.end();
     this.selection.clear();
+    const filter = this.activeFilter;
     const walk = (item) => {
+      if (filter && filter.hidden.has(item.id)) return; // フィルタで隠れたアイテムは選択しない
       this.selection.add(item.id);
       item.children.forEach(walk);
     };
@@ -399,8 +441,100 @@ class Application {
     return { clips, text: ItemClipboard.toText(clips), json: ItemClipboard.toJson(clips) };
   }
 
+  // モーダルダイアログを表示中か
+  get modalOpen() {
+    return this.tabSettings.isOpen || this.filterDialog.isOpen;
+  }
+
+  // ---- フィルタ ----
+
+  get activeFilter() {
+    return this.filters.get(this.activeTabId) || null;
+  }
+
+  // フィルタの [+] で隠れているアイテム（自身か祖先が隠れている）か
+  isFilteredOut(id) {
+    const entry = this.index.get(id);
+    const filter = entry && this.filters.get(entry.tab.id);
+    if (!filter) return false;
+    for (let e = entry; e; e = e.parent && this.index.get(e.parent.id)) {
+      if (filter.hidden.has(e.item.id)) return true;
+    }
+    return false;
+  }
+
+  // 表示タブにフィルタを適用する（Model.filterPlan）。条件とフィルタ中であることをタブに記録し、
+  // 折り畳み状態の変更とあわせて 1 回の Undo で戻る。表示されなくなったアイテムの選択は解除する
+  applyFilter(condition) {
+    this.finishInput();
+    const tabId = this.activeTabId;
+    this.filterCondition = condition;
+    const changed = this.commit((doc) => {
+      const tab = doc.tabs.find((t) => t.id === tabId);
+      tab.filter = Object.assign({}, condition, { active: true });
+      this.refilterTabs([tab]);
+      return { tabId };
+    }, { tabId });
+    if (!changed) this.refresh();
+    for (const id of [...this.selection]) {
+      if (!this.mainArea.layout.nodes.has(id)) this.selection.delete(id);
+    }
+    this.mainArea.draw();
+  }
+
+  // フィルタ中のタブにフィルタをかけ直す（適用時・起動時・ファイルを開いた時）。
+  // [+] の展開状態は記憶しないため、ヒットしないアイテムを隠し直し、折り畳み状態も適用時と同じにする
+  refilterTabs(tabs) {
+    for (const tab of tabs) {
+      if (!tab.filter || !tab.filter.active) continue;
+      const plan = Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options));
+      Model.applyFilterCollapse(tab.root, plan);
+      this.filters.set(tab.id, { key: Application.filterKey(tab.filter), hidden: plan.hidden });
+    }
+  }
+
+  static filterKey(filter) {
+    return JSON.stringify([filter.text, filter.ignoreCase, filter.regex, filter.hideStatuses, filter.hideUnregistered, filter.hideNoStatus]);
+  }
+
+  // 文書のフィルタ状態（Undo/Redo などで変わる）に、[+] で隠すアイテムを合わせる。
+  // 条件が同じなら [+] の展開状態を保ち、変わったら（折り畳み状態は変えずに）隠し直す
+  syncFilters() {
+    const tabIds = new Set();
+    for (const tab of this.doc.tabs) {
+      if (!tab.filter || !tab.filter.active) continue;
+      tabIds.add(tab.id);
+      const key = Application.filterKey(tab.filter);
+      const entry = this.filters.get(tab.id);
+      if (entry && entry.key === key) continue;
+      this.filters.set(tab.id, { key, hidden: Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options)).hidden });
+    }
+    for (const id of [...this.filters.keys()]) {
+      if (!tabIds.has(id)) this.filters.delete(id);
+    }
+  }
+
+  // フィルタの [+] をクリック：隠れていたアイテムを表示する（再び隠すにはフィルタを適用し直す）
+  revealHidden(ids) {
+    const filter = this.activeFilter;
+    if (!filter) return;
+    for (const id of ids) filter.hidden.delete(id);
+    this.mainArea.render();
+  }
+
+  // 表示タブのフィルタを解除し、隠していたアイテムをすべて表示する（条件はタブに残す。折り畳み状態はそのまま）
+  clearFilter() {
+    this.finishInput();
+    const tabId = this.activeTabId;
+    this.commit((doc) => {
+      const tab = doc.tabs.find((t) => t.id === tabId);
+      if (tab.filter) tab.filter.active = false;
+      return { tabId };
+    }, { tabId });
+  }
+
   onClipboardEvent(e, type) {
-    if (this.tabSettings.isOpen) return;
+    if (this.modalOpen) return;
     if (Util.isTextInput(e.target) || this.editor.isEditing || this.tabBar.rename) return;
     if (type === 'paste') {
       e.preventDefault();
@@ -506,8 +640,11 @@ class Application {
 
   onKeyDown(e) {
     // モーダルダイアログ表示中はアプリのショートカットを無効にする（ESC は閉じる）
-    if (this.tabSettings.isOpen) {
-      if (e.key === 'Escape') this.tabSettings.close();
+    if (this.modalOpen) {
+      if (e.key === 'Escape') {
+        this.tabSettings.close();
+        this.filterDialog.close();
+      }
       return;
     }
     if (this.mainArea.handleKeyDown(e)) return;

@@ -565,11 +565,13 @@ class ItemEditor {
         e.preventDefault();
         this.start(node.parentId, { line: lineIndex, pos: 'end' });
         return;
-      case 'ArrowRight':
-        if (start !== line.end || node.children.length === 0) return;
+      case 'ArrowRight': {
+        const child = node.children.find((c) => !c.placeholder); // フィルタで隠したアイテムには移らない
+        if (start !== line.end || !child) return;
         e.preventDefault();
-        this.start(node.children[0].id, { line: lineIndex, pos: 'start' });
+        this.start(child.id, { line: lineIndex, pos: 'start' });
         return;
+      }
     }
   }
 

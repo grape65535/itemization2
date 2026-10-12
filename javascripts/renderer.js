@@ -65,6 +65,9 @@ const Renderer = {
       Renderer.drawItem(ctx, node, state);
       if (TreeLayout.isToggleVisible(node)) Renderer.drawToggle(ctx, node);
     }
+    for (const node of layout.placeholders) {
+      if (visible(node.x, node.y, node.w, node.h)) Renderer.drawPlusMinus(ctx, node, true);
+    }
 
     if (drag && drag.type === 'item') Renderer.drawItemDrag(ctx, layout, drag);
     if (drag && drag.type === 'marquee') Renderer.drawMarquee(ctx, drag, 'stroke');
@@ -170,8 +173,12 @@ const Renderer = {
   },
 
   drawToggle(ctx, node) {
+    Renderer.drawPlusMinus(ctx, TreeLayout.toggleRect(node), node.collapsed);
+  },
+
+  // 四角の [+]（plus）/ [-] のアイコンを矩形 r { x, y, w, h } に描く
+  drawPlusMinus(ctx, r, plus) {
     const col = Renderer.colors;
-    const r = TreeLayout.toggleRect(node);
     ctx.save();
     ctx.fillStyle = col.toggleFill;
     ctx.strokeStyle = col.toggleBorder;
@@ -183,7 +190,7 @@ const Renderer = {
     const cy = r.y + r.h / 2;
     ctx.moveTo(r.x + 3, cy);
     ctx.lineTo(r.x + r.w - 3, cy);
-    if (node.collapsed) {
+    if (plus) {
       ctx.moveTo(cx, r.y + 3);
       ctx.lineTo(cx, r.y + r.h - 3);
     }
@@ -194,7 +201,7 @@ const Renderer = {
   drawItemDrag(ctx, layout, drag) {
     const C = Config;
     const col = Renderer.colors;
-    const target = drag.target && layout.nodes.get(drag.target.id);
+    const target = drag.target && drag.target.node;
     if (target) {
       ctx.save();
       ctx.strokeStyle = col.selected;
@@ -203,7 +210,7 @@ const Renderer = {
       if (drag.target.mode === 'before' || drag.target.mode === 'after') {
         const y = drag.target.mode === 'before' ? target.y - C.verticalGap / 2 : target.y + target.h + C.verticalGap / 2;
         ctx.moveTo(target.x, y);
-        ctx.lineTo(target.x + target.w, y);
+        ctx.lineTo(target.x + (target.placeholder ? C.horizontalGap : target.w), y); // フィルタの [+] は小さいため長めに
         ctx.stroke();
       } else {
         ctx.lineWidth = 2;

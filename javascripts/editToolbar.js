@@ -90,8 +90,14 @@ class EditToolbar {
     this.tooltipTimer = setTimeout(() => {
       this.tooltip.textContent = button.dataset.tooltip;
       this.tooltip.dataset.for = button.dataset.id;
-      this.tooltip.style.left = button.offsetLeft + button.offsetWidth / 2 + 'px';
+      const center = button.offsetLeft + button.offsetWidth / 2;
+      this.tooltip.style.left = center + 'px';
       this.el.append(this.tooltip);
+      // 右上に表示中はツールチップを下に出し、右端からはみ出さないよう左へずらす
+      if (this.el.classList.contains('corner')) {
+        const half = this.tooltip.offsetWidth / 2;
+        this.tooltip.style.left = Math.min(center, this.el.clientWidth - half) + 'px';
+      }
     }, 400);
   }
 
@@ -197,12 +203,14 @@ class EditToolbar {
     return true;
   }
 
-  // 文字入力中以外の表示：選択中のアイテムがあれば最後に選択したアイテムの上に表示し、無ければ隠す
+  // 文字入力中以外の表示：1 つ選択中ならそのアイテムの上、複数選択中ならメインエリアの右上（スクロールしても動かない）に表示し、
+  // 選択が無ければ隠す
   syncSelection() {
     if (this.editor.isEditing) return;
     const area = this.area;
     const ids = this.selectionDecorator.ids();
-    const node = area.layout && !(area.drag && area.drag.type !== 'pending') ? this.selectionDecorator.anchorNode(area.layout) : null;
+    const active = area.layout && !(area.drag && area.drag.type !== 'pending');
+    const node = !active ? null : ids.length >= 2 ? 'corner' : this.selectionDecorator.anchorNode(area.layout);
     if (!node) {
       this.dismissedKey = null;
       this.hide();
@@ -224,7 +232,8 @@ class EditToolbar {
     this.dismissedKey = null;
   }
 
-  // アイテムの上に表示する（上に余地が無ければ下。横はアイテムの中央）。key は表示対象を表す文字列。× で閉じていれば表示せず false
+  // アイテムの上に表示する（上に余地が無ければ下。横はアイテムの中央）。node が 'corner' ならメインエリアの右上
+  // （フィルタ中は漏斗のアイコンの左）。key は表示対象を表す文字列。× で閉じていれば表示せず false
   show(node, key = 'edit:' + node.id) {
     if (this.dismissedKey !== null && this.dismissedKey !== key) {
       // 文字入力中に閉じた後、入力を終えて同じアイテムが選択されたままなら閉じたままにする
@@ -239,6 +248,16 @@ class EditToolbar {
     this.shownKey = key;
     const C = Config;
     const scroller = this.area.scroller;
+    this.el.classList.toggle('corner', node === 'corner');
+    if (node === 'corner') {
+      const margin = C.overlayMargin;
+      const indicator = this.area.filterIndicator;
+      const right = margin + (indicator.hidden ? 0 : indicator.offsetWidth + margin);
+      this.el.style.display = 'flex';
+      this.el.style.top = scroller.scrollTop + margin + 'px';
+      this.el.style.left = Math.max(scroller.scrollLeft + margin, scroller.scrollLeft + scroller.clientWidth - this.el.offsetWidth - right) + 'px';
+      return true;
+    }
     let top = node.y - C.toolbarHeight - C.toolbarGap;
     if (top < scroller.scrollTop) top = node.y + node.h + C.toolbarGap;
     this.el.style.display = 'flex';

@@ -14,7 +14,15 @@ class MainArea {
     textarea.setAttribute('wrap', 'off');
     textarea.style.font = Config.font;
     this.scroller.append(this.spacer, textarea);
-    container.append(this.canvas, this.scroller);
+    // フィルタ中の印（漏斗のアイコン）。メインエリアの右上に重ね、スクロールしても動かない。クリックでフィルタを設定
+    this.filterIndicator = Util.el('button', 'filter-indicator');
+    this.filterIndicator.type = 'button';
+    this.filterIndicator.title = 'フィルタ中（クリックでフィルタを設定）';
+    this.filterIndicator.setAttribute('aria-label', this.filterIndicator.title);
+    this.filterIndicator.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
+      + '<path d="M3 4h18l-7 8.5V19l-4 2v-8.5z" fill="currentColor"/></svg>';
+    this.filterIndicator.addEventListener('click', () => app.filterDialog.open());
+    container.append(this.canvas, this.scroller, this.filterIndicator);
     this.ctx = this.canvas.getContext('2d');
 
     this.measurer = new TextMeasurer();
@@ -26,6 +34,7 @@ class MainArea {
     this.scrollPositions = new Map();
 
     this.scroller.addEventListener('scroll', () => {
+      this.followScroll();
       this.positionEditor();
       this.draw();
     });
@@ -61,7 +70,8 @@ class MainArea {
       }
     }
     const override = this.editor.isEditing ? this.editor.override : null;
-    this.layout = TreeLayout.compute(tab.root, this.measurer, override, tab.options);
+    const filter = this.app.activeFilter;
+    this.layout = TreeLayout.compute(tab.root, this.measurer, override, tab.options, filter && filter.hidden);
     this.spacer.style.width = this.layout.width + 'px';
     this.spacer.style.height = this.layout.height + 'px';
     if (this.renderedTabId !== tab.id) {
@@ -70,8 +80,47 @@ class MainArea {
       this.scroller.scrollTop = pos.y;
       this.renderedTabId = tab.id;
     }
+    this.followScroll();
     this.positionEditor();
+    this.updateFilterIndicator();
     this.draw();
+  }
+
+  // タブの設定「スクロールに追従する」：子のあるアイテムが縦スクロールで表示範囲から出る場合、表示範囲内に収まるよう動かす。
+  // 動かせるのは可視の子孫のうち最上部のアイテムの上端〜最下部のアイテムの下端まで。node.y を書き換えるため、描画・ヒットテスト等はそのまま追従する
+  followScroll() {
+    const layout = this.layout;
+    if (!layout) return;
+    const follow = this.app.activeTab.options.followScroll;
+    const gap = Config.followScrollGap;
+    const viewTop = this.scroller.scrollTop + gap;
+    const viewBottom = this.scroller.scrollTop + this.scroller.clientHeight - gap;
+    for (const node of layout.order) {
+      let y = node.baseY;
+      if (follow && node.children.length > 0) {
+        if (y < viewTop) y = viewTop;
+        else if (y + node.h > viewBottom) y = Math.max(viewBottom - node.h, viewTop);
+        const lo = Math.min(node.descTop, node.baseY);
+        const hi = Math.max(node.descBottom - node.h, node.baseY);
+        y = Math.min(Math.max(y, lo), hi);
+      }
+      node.y = y;
+    }
+  }
+
+  // SVG/PDF 用の図形（スクロールの追従は除き、配置どおりの位置で作る）
+  exportScene() {
+    for (const node of this.layout.order) node.y = node.baseY;
+    const scene = FileExport.scene(this.layout);
+    this.followScroll();
+    return scene;
+  }
+
+  // フィルタ中だけ漏斗のアイコンを表示する（スクロールバーに重ならないよう、その内側に置く）
+  updateFilterIndicator() {
+    const el = this.filterIndicator;
+    el.hidden = !this.app.activeFilter;
+    el.style.right = this.container.clientWidth - this.scroller.clientWidth + Config.overlayMargin + 'px';
   }
 
   // 見えない TEXTAREA をカーソル位置に、ツールバーをアイテムの上（隠れる場合は下）に置く
@@ -154,15 +203,19 @@ class MainArea {
   hitTest(p) {
     const order = this.layout.order;
     const b = Config.borderHitWidth;
+    for (const n of this.layout.placeholders) {
+      if (p.x >= n.x - 2 && p.x <= n.x + n.w + 2 && p.y >= n.y - 2 && p.y <= n.y + n.h + 2) return { type: 'placeholder', node: n };
+    }
     for (let i = order.length - 1; i >= 0; i--) {
       const n = order[i];
       if (TreeLayout.isToggleVisible(n)) {
         const t = TreeLayout.toggleRect(n);
         if (p.x >= t.x - 2 && p.x <= t.x + t.w + 2 && p.y >= t.y - 2 && p.y <= t.y + t.h + 2) return { type: 'toggle', id: n.id };
       }
-      // 枠線（1px）とその両側 b px を「枠」とみなす
+      // 枠線（1px）とその両側 b px を「枠」とみなす。ステータスのバッジの行（文字列より上）も枠と同じ扱い
       if (p.x >= n.x - b && p.x < n.x + n.w + b && p.y >= n.y - b && p.y < n.y + n.h + b) {
-        const inner = p.x >= n.x + 1 + b && p.x < n.x + n.w - 1 - b && p.y >= n.y + 1 + b && p.y < n.y + n.h - 1 - b;
+        const top = n.status ? Math.max(n.y + 1 + b, n.y + Config.paddingY + n.lines[0].top) : n.y + 1 + b;
+        const inner = p.x >= n.x + 1 + b && p.x < n.x + n.w - 1 - b && p.y >= top && p.y < n.y + n.h - 1 - b;
         return { type: 'item', id: n.id, part: inner ? 'inner' : 'border' };
       }
     }
@@ -193,7 +246,7 @@ class MainArea {
     if (this.drag) return;
     const p = this.layout && this.toContent(e);
     const hit = this.layout && this.hitTest(p);
-    this.scroller.style.cursor = !hit ? 'default' : hit.type === 'toggle' || this.linkAt(hit, p) ? 'pointer'
+    this.scroller.style.cursor = !hit ? 'default' : hit.type === 'toggle' || hit.type === 'placeholder' || this.linkAt(hit, p) ? 'pointer'
       : hit.part === 'inner' ? 'text' : 'default';
   }
 
@@ -212,6 +265,11 @@ class MainArea {
 
     if (hit && hit.type === 'toggle') {
       this.app.toggleCollapse(hit.id);
+      return;
+    }
+    // フィルタで隠したアイテムの [+]：隠れていたアイテムを表示する
+    if (hit && hit.type === 'placeholder') {
+      this.app.revealHidden(hit.node.hiddenIds);
       return;
     }
     // 文字入力中のアイテム内：クリックでカーソル移動、ドラッグ・SHIFT+クリックで範囲選択、ダブル／トリプルクリックで単語／段落を選択
@@ -244,23 +302,31 @@ class MainArea {
       }
       this.drag = { type: 'pending', id: hit.id, part: hit.part, link, start: p, client: { x: e.clientX, y: e.clientY } };
     } else if (modifier) {
-      this.drag = { type: 'marquee', start: p, current: p, rect: null, candidates: new Set() };
-    } else {
+      // SHIFT / CTRL を押しながらアイテム以外をドラッグ：スクロール
       this.drag = {
         type: 'pan', client: { x: e.clientX, y: e.clientY },
         scroll: { x: this.scroller.scrollLeft, y: this.scroller.scrollTop }, moved: false,
       };
+    } else {
+      // アイテム以外をドラッグ：範囲選択（ドラッグせずに離せば選択を解除）
+      this.drag = { type: 'marquee', start: p, current: p, rect: null, candidates: new Set(), client: { x: e.clientX, y: e.clientY }, moved: false };
     }
   }
 
-  // アイテム上の右クリック：左クリックと同様に選択してから（未選択なら選択、SHIFT/CTRL なら選択に追加）右クリックメニューを開く
+  // アイテム上の右クリック：左クリックと同様に選択してから（未選択なら選択、SHIFT/CTRL なら選択に追加）右クリックメニューを開く。
+  // アイテム外の右クリック：選択を変えずに、アイテム外のメニュー（フィルタ）を開く
   onContextMenu(e) {
     if (e.defaultPrevented || !this.layout || this.toolbar.el.contains(e.target)) return;
+    const r = this.scroller.getBoundingClientRect();
+    if (e.clientX - r.left >= this.scroller.clientWidth || e.clientY - r.top >= this.scroller.clientHeight) return; // スクロールバー
     const hit = this.hitTest(this.toContent(e));
-    if (!hit || hit.type !== 'item') return;
     e.preventDefault();
     this.drag = null;
     this.toolbar.closePopup();
+    if (!hit || hit.type !== 'item') {
+      this.app.menuBar.openContext(e.clientX, e.clientY, true);
+      return;
+    }
     this.editor.end();
     const sel = this.app.selection;
     if (e.shiftKey || e.ctrlKey || e.metaKey) {
@@ -300,6 +366,8 @@ class MainArea {
         }
         break;
       case 'marquee':
+        if (!d.moved && dist(d.client) < Config.dragThreshold) break;
+        d.moved = true;
         this.autoScroll(e);
         d.current = this.toContent(e);
         this.updateMarquee();
@@ -334,12 +402,9 @@ class MainArea {
         else this.draw();
         break;
       case 'pan':
-        if (!d.moved) {
-          sel.clear();
-          this.draw();
-        }
         break;
       case 'marquee':
+        if (!d.moved) sel.clear();
         for (const id of d.candidates) sel.add(id);
         this.draw();
         break;
@@ -371,16 +436,25 @@ class MainArea {
     this.draw();
   }
 
-  // ドロップ先：アイテム上部 3 割＝直前の兄弟、下部 3 割＝直後の兄弟、中央＝最後の子（ルートは常に子）
+  // ドロップ先 { id, mode, node }（node は表示位置）：アイテム上部 3 割＝直前の兄弟、下部 3 割＝直後の兄弟、中央＝最後の子（ルートは常に子）。
+  // フィルタで隠したアイテムの [+] は、上半分＝隠れた最初のアイテムの前、下半分＝最後のアイテムの後（子にはできない）
   dropTarget(p) {
+    const gap = Config.verticalGap / 2;
+    for (const n of this.layout.placeholders) {
+      if (this.drag.excluded.has(n.parentId)) continue;
+      // [+] は小さいため、右側にも少し広く受け付ける
+      if (p.x < n.x - gap || p.x > n.x + n.w + Config.horizontalGap / 2 || p.y < n.y - gap || p.y > n.y + n.h + gap) continue;
+      if (p.y < n.y + n.h / 2) return { id: n.hiddenIds[0], mode: 'before', node: n };
+      return { id: n.hiddenIds[n.hiddenIds.length - 1], mode: 'after', node: n };
+    }
     const order = this.layout.order;
     for (let i = order.length - 1; i >= 0; i--) {
       const n = order[i];
       if (this.drag.excluded.has(n.id)) continue;
       if (p.x < n.x || p.x > n.x + n.w || p.y < n.y || p.y > n.y + n.h) continue;
-      if (n.parentId === null) return { id: n.id, mode: 'child' };
+      if (n.parentId === null) return { id: n.id, mode: 'child', node: n };
       const rel = (p.y - n.y) / n.h;
-      return { id: n.id, mode: rel < 0.3 ? 'before' : rel > 0.7 ? 'after' : 'child' };
+      return { id: n.id, mode: rel < 0.3 ? 'before' : rel > 0.7 ? 'after' : 'child', node: n };
     }
     return null;
   }

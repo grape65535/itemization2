@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.1.14',
+  version: 'v2.2.15',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',
@@ -29,9 +29,13 @@ const Config = {
   margin: 24,
   horizontalGap: 48,
   verticalGap: 10,
+  // 親アイテムがスクロールに追従する時の、メインエリアの上端・下端との間隔
+  followScrollGap: 8,
 
   // [+][-] アイコン
   toggleSize: 12,
+  // フィルタで隠したアイテムの代わりに置く [+]（展開アイコン）の大きさ
+  placeholderSize: 16,
 
   // ドラッグ開始とみなす移動量(px)
   dragThreshold: 4,
@@ -95,6 +99,8 @@ const Config = {
   // 文字入力中のツールバーの高さ(px)とアイテムとの間隔
   toolbarHeight: 30,
   toolbarGap: 6,
+  // メインエリアの右上に重ねる表示（フィルタ中の漏斗・複数選択中のツールバー）の、端からの間隔
+  overlayMargin: 8,
 
   get font() {
     return `${this.fontSize}px ${this.fontFamily}`;

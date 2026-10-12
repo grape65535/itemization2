@@ -262,6 +262,32 @@ body.tab-dragging * {
   overflow: auto;
 }
 
+.filter-indicator {
+  position: absolute;
+  top: 8px; /* Config.overlayMargin */
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #1e64f0;
+  border-radius: 6px;
+  background: rgba(207, 224, 255, 0.92);
+  color: #1e64f0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.filter-indicator:hover {
+  background: #b9d1ff;
+}
+
+.filter-indicator[hidden] {
+  display: none;
+}
+
 .main-spacer {
   position: absolute;
   left: 0;
@@ -372,6 +398,11 @@ body.tab-dragging * {
   border-radius: 4px;
   white-space: nowrap;
   pointer-events: none;
+}
+
+.edit-toolbar.corner .edit-toolbar-tooltip {
+  top: calc(100% + 6px);
+  bottom: auto;
 }
 
 .edit-toolbar-popup {
@@ -493,7 +524,7 @@ body.busy * {
   cursor: progress !important;
 }
 
-/* ---- モーダルダイアログ（タブの設定） ---- */
+/* ---- モーダルダイアログ（タブの設定・フィルタを設定） ---- */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -542,11 +573,20 @@ body.busy * {
   padding: 16px 20px;
 }
 
+.modal-dialog.tab-settings-dialog {
+  width: 830px;
+}
+
 .modal-footer {
   display: flex;
   justify-content: space-between;
   padding: 12px 20px;
   border-top: 1px solid #dde2e8;
+}
+
+.modal-footer-group {
+  display: flex;
+  gap: 8px;
 }
 
 .settings-field {
@@ -568,6 +608,24 @@ body.busy * {
 
 .settings-field-block .settings-label {
   padding-top: 4px;
+}
+
+.settings-inline {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.settings-check input {
+  margin: 0;
+  cursor: pointer;
 }
 
 .settings-select,
@@ -610,7 +668,9 @@ body.busy * {
 
 .status-row {
   display: grid;
-  grid-template-columns: 14px 150px 90px 1fr auto;
+  /* ステータス名の欄・見本は最大 12 文字（全角 14px）が見切れない幅。
+     見出し行は文字が小さいため em ではなく px で指定して列位置を揃える */
+  grid-template-columns: 14px 204px 90px 204px auto;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
@@ -696,6 +756,7 @@ body.busy * {
 
 .status-remove {
   height: 26px;
+  white-space: nowrap;
   padding: 0 10px;
 }
 
@@ -706,4 +767,98 @@ body.busy * {
 .settings-error {
   min-height: 1.2em;
   color: #d9534f;
+}
+
+/* ---- フィルタを設定 ---- */
+.modal-dialog.filter-dialog {
+  width: 520px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-input {
+  flex: 1;
+  min-width: 0;
+  margin-right: 4px;
+}
+
+/* オン・オフを切り替えるアイコンボタン */
+.filter-toggle {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: #2f3a4a;
+  font: bold 13px/1 Consolas, Menlo, monospace;
+  cursor: pointer;
+}
+
+.filter-toggle:hover {
+  background: #e6efff;
+}
+
+.filter-toggle[aria-pressed='true'] {
+  border-color: #1e64f0;
+  background: #cfe0ff;
+  color: #1e64f0;
+}
+
+.filter-error {
+  margin-top: 8px;
+}
+
+/* 表示するステータスのチェックボックス */
+.filter-statuses {
+  margin-top: 16px;
+}
+
+.filter-statuses-title {
+  margin-bottom: 4px;
+  font-weight: bold;
+}
+
+.filter-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 28px;
+  cursor: pointer;
+}
+
+.filter-check input {
+  flex: none;
+  margin: 0;
+  cursor: pointer;
+}
+
+.filter-check .status-badge {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 1 列目に 1〜6、2 列目に 7〜12（行数は gridTemplateRows で指定） */
+.filter-status-grid,
+.filter-status-extra {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 16px;
+  margin-left: 22px;
+}
+
+.filter-status-grid {
+  grid-auto-flow: column;
+}
+
+.filter-status-extra {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #dde2e8;
 }

@@ -2,8 +2,9 @@
 
 // 保存データ（JSON）のツリー操作
 //   Document = { format, tabs: [Tab] }
-//   Tab      = { id, name?, root: Item, options: TabOptions }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
-//   TabOptions = { parentAlign: 'center'|'top', maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
+//   Tab      = { id, name?, root: Item, options: TabOptions, filter?: TabFilter }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
+//   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active }（フィルタの条件と、フィルタ中か）
+//   TabOptions = { parentAlign: 'center'|'top', followScroll, maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
 //   Item     = { id, text, collapsed, children: [Item], spans?, fill?, align?, status? }（装飾は richText.js を参照、status はステータス名）
 const Model = {
   FORMAT: 1,
@@ -53,9 +54,97 @@ const Model = {
       : C.defaultStatuses.map((s) => Object.assign({}, s));
     return {
       parentAlign: o.parentAlign === 'top' ? 'top' : 'center',
+      followScroll: !!o.followScroll,
       maxWidth: Number.isFinite(width) ? Util.clamp(width, minW, maxW) : C.maxContentWidth,
       statuses,
     };
+  },
+
+  // フィルタの条件を検証・補正する。条件が無い・正規表現が不正なら null
+  normalizeFilter(raw) {
+    if (!raw || typeof raw !== 'object') return null;
+    const names = Array.isArray(raw.hideStatuses) ? raw.hideStatuses.filter((n) => typeof n === 'string' && n) : [];
+    const filter = {
+      text: typeof raw.text === 'string' ? raw.text : '',
+      ignoreCase: !!raw.ignoreCase,
+      regex: !!raw.regex,
+      hideStatuses: [...new Set(names)],
+      hideUnregistered: !!raw.hideUnregistered,
+      hideNoStatus: !!raw.hideNoStatus,
+      active: !!raw.active,
+    };
+    if (!Model.filterHasCondition(filter)) return null;
+    try {
+      Model.filterMatcher(filter, null);
+    } catch (e) {
+      return null;
+    }
+    return filter;
+  },
+
+  // 検索文字列があるか、表示しないステータスの条件があるか（無ければ全アイテムがヒットするため条件として扱わない）
+  filterHasCondition(filter) {
+    return filter.text !== '' || (filter.hideStatuses || []).length > 0 || !!filter.hideUnregistered || !!filter.hideNoStatus;
+  },
+
+  // アイテムが条件に合う（ヒット）かを判定する関数を返す。正規表現が不正なら SyntaxError。
+  // 文字列: 条件に合う部分を含むか（検索文字列が空なら問わない）。
+  // ステータス: タブの設定（options）にステータスが登録されている時だけ、表示しないステータス・未登録のステータス・ステータス無しを除く。
+  // 両方の条件は AND
+  filterMatcher(condition, options) {
+    let re = null;
+    if (condition.text !== '') {
+      const source = condition.regex ? condition.text : condition.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      re = new RegExp(source, condition.ignoreCase ? 'i' : '');
+    }
+    const names = new Set(options ? options.statuses.map((s) => s.name) : []);
+    const hide = new Set(condition.hideStatuses || []);
+    const statusOk = (status) => {
+      if (names.size === 0) return true;
+      if (!status) return !condition.hideNoStatus;
+      if (names.has(status)) return !hide.has(status);
+      return !condition.hideUnregistered;
+    };
+    return (item) => statusOk(item.status) && (!re || re.test(item.text));
+  },
+
+  // フィルタをかけた時の表示：条件に合うアイテム（ヒット）とその祖先・ルートを表示し、
+  // それらの子のうちヒットを含まない兄弟を [+] で隠す（hidden）。子孫にヒットを含むアイテムは展開し（expand）、
+  // 含まないヒットは折り畳む（collapse）。ルートもヒットしなければ、展開して子をすべて隠す
+  filterPlan(root, test) {
+    const below = new Map(); // 表示するアイテムの ID -> 子孫にヒットを含むか
+    const visit = (item) => {
+      let found = false;
+      for (const child of item.children) found = visit(child) || found;
+      const hit = test(item);
+      if (hit || found || item === root) below.set(item.id, found);
+      return hit || found;
+    };
+    visit(root);
+    const plan = { hidden: new Set(), expand: new Set(), collapse: new Set() };
+    const walk = (item) => {
+      if (below.get(item.id) || (item === root && !test(item))) {
+        if (item.children.length) plan.expand.add(item.id);
+        for (const child of item.children) {
+          if (below.has(child.id)) walk(child);
+          else plan.hidden.add(child.id);
+        }
+      } else if (item.children.length) {
+        plan.collapse.add(item.id);
+      }
+    };
+    walk(root);
+    return plan;
+  },
+
+  // filterPlan の展開・折り畳みをツリーに反映する
+  applyFilterCollapse(root, plan) {
+    const walk = (item) => {
+      if (plan.expand.has(item.id)) item.collapsed = false;
+      if (plan.collapse.has(item.id)) item.collapsed = true;
+      item.children.forEach(walk);
+    };
+    walk(root);
   },
 
   createDocument() {
@@ -86,6 +175,8 @@ const Model = {
         const fixed = { id: uniqueId(tab && tab.id), root: fixItem(tab && tab.root) };
         if (tab && typeof tab.name === 'string' && tab.name) fixed.name = tab.name;
         fixed.options = Model.normalizeOptions(tab && tab.options);
+        const filter = Model.normalizeFilter(tab && tab.filter);
+        if (filter) fixed.filter = filter;
         return fixed;
       }),
     };

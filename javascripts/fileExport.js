@@ -63,13 +63,14 @@ const FileExport = {
 
   // ---- 描画内容 ----
 
-  // 画面と同じ配置（折り畳み状態を含む）から、SVG/PDF に描く図形を作る（[+][-] アイコンは描かない）
+  // 画面と同じ配置（折り畳み状態・フィルタを含む）から、SVG/PDF に描く図形を作る（[+][-] アイコンは描かない）
   scene(layout) {
     const C = Config;
     const connectors = [];
     const items = [];
     for (const node of layout.order) {
       for (const child of node.children) {
+        if (child.placeholder) continue; // フィルタで隠したアイテムの [+] は描かない
         connectors.push({ x1: node.x + node.w, y1: node.y + node.h / 2, x2: child.x, y2: child.y + child.h / 2 });
       }
       // 文字は装飾の同じ区間ごと（座標はコンテンツ座標、y はベースライン）
