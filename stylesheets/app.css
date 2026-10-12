@@ -748,3 +748,7 @@ body.busy * {
   background: #cfe0ff;
   color: #1e64f0;
 }
+
+.filter-error {
+  margin-top: 8px;
+}

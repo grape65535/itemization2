@@ -61,7 +61,8 @@ class MainArea {
       }
     }
     const override = this.editor.isEditing ? this.editor.override : null;
-    this.layout = TreeLayout.compute(tab.root, this.measurer, override, tab.options);
+    const filter = this.app.activeFilter;
+    this.layout = TreeLayout.compute(tab.root, this.measurer, override, tab.options, filter && filter.hidden);
     this.spacer.style.width = this.layout.width + 'px';
     this.spacer.style.height = this.layout.height + 'px';
     if (this.renderedTabId !== tab.id) {
@@ -154,6 +155,9 @@ class MainArea {
   hitTest(p) {
     const order = this.layout.order;
     const b = Config.borderHitWidth;
+    for (const n of this.layout.placeholders) {
+      if (p.x >= n.x - 2 && p.x <= n.x + n.w + 2 && p.y >= n.y - 2 && p.y <= n.y + n.h + 2) return { type: 'placeholder', node: n };
+    }
     for (let i = order.length - 1; i >= 0; i--) {
       const n = order[i];
       if (TreeLayout.isToggleVisible(n)) {
@@ -193,7 +197,7 @@ class MainArea {
     if (this.drag) return;
     const p = this.layout && this.toContent(e);
     const hit = this.layout && this.hitTest(p);
-    this.scroller.style.cursor = !hit ? 'default' : hit.type === 'toggle' || this.linkAt(hit, p) ? 'pointer'
+    this.scroller.style.cursor = !hit ? 'default' : hit.type === 'toggle' || hit.type === 'placeholder' || this.linkAt(hit, p) ? 'pointer'
       : hit.part === 'inner' ? 'text' : 'default';
   }
 
@@ -212,6 +216,11 @@ class MainArea {
 
     if (hit && hit.type === 'toggle') {
       this.app.toggleCollapse(hit.id);
+      return;
+    }
+    // フィルタで隠したアイテムの [+]：隠れていたアイテムを表示する
+    if (hit && hit.type === 'placeholder') {
+      this.app.revealHidden(hit.node.hiddenIds);
       return;
     }
     // 文字入力中のアイテム内：クリックでカーソル移動、ドラッグ・SHIFT+クリックで範囲選択、ダブル／トリプルクリックで単語／段落を選択
@@ -371,16 +380,25 @@ class MainArea {
     this.draw();
   }
 
-  // ドロップ先：アイテム上部 3 割＝直前の兄弟、下部 3 割＝直後の兄弟、中央＝最後の子（ルートは常に子）
+  // ドロップ先 { id, mode, node }（node は表示位置）：アイテム上部 3 割＝直前の兄弟、下部 3 割＝直後の兄弟、中央＝最後の子（ルートは常に子）。
+  // フィルタで隠したアイテムの [+] は、上半分＝隠れた最初のアイテムの前、下半分＝最後のアイテムの後（子にはできない）
   dropTarget(p) {
+    const gap = Config.verticalGap / 2;
+    for (const n of this.layout.placeholders) {
+      if (this.drag.excluded.has(n.parentId)) continue;
+      // [+] は小さいため、右側にも少し広く受け付ける
+      if (p.x < n.x - gap || p.x > n.x + n.w + Config.horizontalGap / 2 || p.y < n.y - gap || p.y > n.y + n.h + gap) continue;
+      if (p.y < n.y + n.h / 2) return { id: n.hiddenIds[0], mode: 'before', node: n };
+      return { id: n.hiddenIds[n.hiddenIds.length - 1], mode: 'after', node: n };
+    }
     const order = this.layout.order;
     for (let i = order.length - 1; i >= 0; i--) {
       const n = order[i];
       if (this.drag.excluded.has(n.id)) continue;
       if (p.x < n.x || p.x > n.x + n.w || p.y < n.y || p.y > n.y + n.h) continue;
-      if (n.parentId === null) return { id: n.id, mode: 'child' };
+      if (n.parentId === null) return { id: n.id, mode: 'child', node: n };
       const rel = (p.y - n.y) / n.h;
-      return { id: n.id, mode: rel < 0.3 ? 'before' : rel > 0.7 ? 'after' : 'child' };
+      return { id: n.id, mode: rel < 0.3 ? 'before' : rel > 0.7 ? 'after' : 'child', node: n };
     }
     return null;
   }

@@ -25,7 +25,8 @@ class Application {
     this.mainArea = new MainArea(this, main);
     this.tabSettings = new TabSettingsDialog(this);
     this.filterDialog = new FilterDialog(this);
-    this.filterCondition = null; // フィルタの条件 { text, ignoreCase, regex }（検索・フィルタ処理は未実装）
+    this.filterCondition = null; // 最後に適用したフィルタの条件 { text, ignoreCase, regex }（ダイアログの初期値）
+    this.filters = new Map(); // タブ ID -> 適用中のフィルタ { condition, hidden: [+] で隠すアイテムの ID の Set }（文書には保存しない）
 
     // ファイルを開く（OS 標準のダイアログ）・画面へのドロップ
     this.fileInput = Util.el('input', 'file-input');
@@ -92,7 +93,7 @@ class Application {
     const ids = [];
     for (const id of this.selection) {
       const entry = this.index.get(id);
-      if (!entry || !entry.parent || entry.tab.id !== this.activeTabId) continue;
+      if (!entry || !entry.parent || entry.tab.id !== this.activeTabId || this.isFilteredOut(id)) continue;
       let ancestorSelected = false;
       for (let e = this.index.get(entry.parent.id); e; e = e.parent && this.index.get(e.parent.id)) {
         if (this.selection.has(e.item.id)) {
@@ -242,7 +243,7 @@ class Application {
     const ids = [...this.selection]
       .filter((id) => {
         const entry = this.index.get(id);
-        return entry && entry.parent && entry.tab.id === this.activeTabId;
+        return entry && entry.parent && entry.tab.id === this.activeTabId && !this.isFilteredOut(id);
       })
       .sort((a, b) => this.index.get(a).order - this.index.get(b).order);
     if (ids.length === 0) return;
@@ -372,12 +373,12 @@ class Application {
 
   // ---- 全て選択・コピー・切り取り・貼り付け ----
 
-  // アクティブタブ内の選択中アイテム（文書順）
+  // アクティブタブ内の選択中アイテム（文書順。フィルタで隠れたアイテムは除く）
   selectedIds() {
     return [...this.selection]
       .filter((id) => {
         const entry = this.index.get(id);
-        return entry && entry.tab.id === this.activeTabId;
+        return entry && entry.tab.id === this.activeTabId && !this.isFilteredOut(id);
       })
       .sort((a, b) => this.index.get(a).order - this.index.get(b).order);
   }
@@ -385,7 +386,9 @@ class Application {
   selectAll() {
     this.editor.end();
     this.selection.clear();
+    const filter = this.activeFilter;
     const walk = (item) => {
+      if (filter && filter.hidden.has(item.id)) return; // フィルタで隠れたアイテムは選択しない
       this.selection.add(item.id);
       item.children.forEach(walk);
     };
@@ -406,9 +409,86 @@ class Application {
     return this.tabSettings.isOpen || this.filterDialog.isOpen;
   }
 
-  // フィルタを削除する（検索・フィルタ処理は未実装のため、条件を消すだけ）
+  // ---- フィルタ ----
+
+  get activeFilter() {
+    return this.filters.get(this.activeTabId) || null;
+  }
+
+  // フィルタの [+] で隠れているアイテム（自身か祖先が隠れている）か
+  isFilteredOut(id) {
+    const entry = this.index.get(id);
+    const filter = entry && this.filters.get(entry.tab.id);
+    if (!filter) return false;
+    for (let e = entry; e; e = e.parent && this.index.get(e.parent.id)) {
+      if (filter.hidden.has(e.item.id)) return true;
+    }
+    return false;
+  }
+
+  // 表示タブにフィルタを適用する。条件に合うアイテム（ヒット）とその祖先・ルートを表示し、
+  // それらの子のうちヒットを含まない兄弟は [+] で隠す。ヒットを子孫に含まないヒットは折り畳む（祖先は展開する）。
+  // 折り畳みの変更は 1 回の Undo で戻る。表示されなくなったアイテムの選択は解除する
+  applyFilter(condition, test) {
+    this.finishInput();
+    const tab = this.activeTab;
+    const tabId = tab.id;
+    const shown = new Map(); // 表示するアイテムの ID -> 子孫にヒットを含むか
+    const visit = (item) => {
+      let below = false;
+      for (const child of item.children) below = visit(child) || below;
+      const hit = test(item.text);
+      if (hit || below || item === tab.root) shown.set(item.id, below);
+      return hit || below;
+    };
+    visit(tab.root);
+    const hidden = new Set();
+    const expand = new Set();
+    const collapse = new Set();
+    const walk = (item) => {
+      const below = shown.get(item.id);
+      // ヒットを含まないルートも展開して、子を [+] で隠す
+      if (below || (item === tab.root && !test(item.text))) {
+        if (item.children.length) expand.add(item.id);
+        for (const child of item.children) {
+          if (shown.has(child.id)) walk(child);
+          else hidden.add(child.id);
+        }
+      } else if (item.children.length) {
+        collapse.add(item.id);
+      }
+    };
+    walk(tab.root);
+    this.filterCondition = condition;
+    this.filters.set(tabId, { condition, hidden });
+    const changed = this.commit((doc) => {
+      const apply = (item) => {
+        if (expand.has(item.id)) item.collapsed = false;
+        if (collapse.has(item.id)) item.collapsed = true;
+        item.children.forEach(apply);
+      };
+      apply(doc.tabs.find((t) => t.id === tabId).root);
+      return { tabId };
+    }, { tabId });
+    if (!changed) this.refresh();
+    for (const id of [...this.selection]) {
+      if (!this.mainArea.layout.nodes.has(id)) this.selection.delete(id);
+    }
+    this.mainArea.draw();
+  }
+
+  // フィルタの [+] をクリック：隠れていたアイテムを表示する（再び隠すにはフィルタを適用し直す）
+  revealHidden(ids) {
+    const filter = this.activeFilter;
+    if (!filter) return;
+    for (const id of ids) filter.hidden.delete(id);
+    this.mainArea.render();
+  }
+
+  // 表示タブのフィルタを削除し、隠していたアイテムをすべて表示する（折り畳み状態はそのまま）
   clearFilter() {
-    this.filterCondition = null;
+    this.filters.delete(this.activeTabId);
+    this.mainArea.render();
   }
 
   onClipboardEvent(e, type) {

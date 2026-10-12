@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.2.0',
+  version: 'v2.2.1',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',
@@ -32,6 +32,8 @@ const Config = {
 
   // [+][-] アイコン
   toggleSize: 12,
+  // フィルタで隠したアイテムの代わりに置く [+]（展開アイコン）の大きさ
+  placeholderSize: 16,
 
   // ドラッグ開始とみなす移動量(px)
   dragThreshold: 4,

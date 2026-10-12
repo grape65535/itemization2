@@ -1,7 +1,7 @@
 'use strict';
 
-// 「編集 → フィルタを設定」のモーダルダイアログ。検索文字列と検索方法（大文字小文字を区別しない・正規表現）を入力する
-// OK 時の検索・フィルタ処理は未実装（入力した条件を app.filterCondition に記録するだけ）
+// 「編集 → フィルタを設定」のモーダルダイアログ。検索文字列と検索方法（大文字小文字を区別しない・正規表現）を入力し、
+// OK で表示タブにフィルタを適用する（Application.applyFilter）
 class FilterDialog {
   constructor(app) {
     this.app = app;
@@ -37,7 +37,10 @@ class FilterDialog {
     const ignoreCase = this.toggleButton('Aa', '大文字小文字を区別しない', current.ignoreCase);
     const regex = this.toggleButton('.*', '正規表現で検索', current.regex);
     row.append(input, ignoreCase, regex);
-    body.append(row);
+    this.error = Util.el('div', 'settings-error filter-error');
+    body.append(row, this.error);
+    this.input = input;
+    input.addEventListener('input', () => this.showError(''));
 
     const footer = Util.el('div', 'modal-footer');
     const cancel = Util.el('button', 'settings-button', 'キャンセル');
@@ -84,10 +87,34 @@ class FilterDialog {
     return button.getAttribute('aria-pressed') === 'true';
   }
 
-  // TODO: 検索・フィルタ処理は次回以降に実装する
+  // 条件に合う文字列を含むかを判定する関数を返す。正規表現が不正なら SyntaxError
+  static matcher(condition) {
+    const source = condition.regex ? condition.text : condition.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const re = new RegExp(source, condition.ignoreCase ? 'i' : '');
+    return (text) => re.test(text);
+  }
+
+  // 入力を検証してフィルタを適用する（検索文字列が空・正規表現が不正ならメッセージを表示し、閉じない）
   submit(condition) {
+    if (condition.text === '') {
+      this.showError('検索する文字列を入力してください');
+      return;
+    }
+    let test;
+    try {
+      test = FilterDialog.matcher(condition);
+    } catch (e) {
+      this.showError('正規表現が正しくありません: ' + e.message);
+      return;
+    }
     this.close();
-    this.app.filterCondition = condition;
+    this.app.applyFilter(condition, test);
+  }
+
+  showError(message) {
+    this.error.textContent = message;
+    this.input.classList.toggle('invalid', !!message);
+    if (message) this.input.focus();
   }
 
   close() {

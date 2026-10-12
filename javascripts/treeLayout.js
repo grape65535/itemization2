@@ -6,12 +6,14 @@
 const TreeLayout = {
   // override: 文字入力中アイテムの { id, text, styles, fill, align }（未確定の内容で寸法を計算するため）
   // options: タブの設定（最大表示幅 maxWidth、親の縦位置 parentAlign）
-  compute(root, measurer, override, options) {
+  // hidden: フィルタで隠すアイテムの ID の Set（連続する兄弟ごとに 1 つの [+]（隠れたアイテムの展開アイコン）にまとめる）
+  compute(root, measurer, override, options, hidden) {
     const C = Config;
     const maxWidth = (options && options.maxWidth) || C.maxContentWidth;
     const parentTop = !!options && options.parentAlign === 'top';
     const nodes = new Map();
     const order = []; // 可視アイテムの文書順
+    const placeholders = []; // フィルタで隠したアイテムの [+]（order・nodes には含めない）
     const maxWidthByDepth = [];
 
     const measure = (item, depth, parentId) => {
@@ -63,8 +65,27 @@ const TreeLayout = {
       order.push(node);
       maxWidthByDepth[depth] = Math.max(maxWidthByDepth[depth] || 0, node.w);
       if (!item.collapsed) {
-        for (const child of item.children) node.children.push(measure(child, depth + 1, item.id));
+        let group = null;
+        for (const child of item.children) {
+          if (hidden && hidden.has(child.id)) {
+            if (!group) {
+              group = placeholder(depth + 1, item.id);
+              node.children.push(group);
+            }
+            group.hiddenIds.push(child.id);
+          } else {
+            group = null;
+            node.children.push(measure(child, depth + 1, item.id));
+          }
+        }
       }
+      return node;
+    };
+    const placeholder = (depth, parentId) => {
+      const s = C.placeholderSize;
+      const node = { id: null, placeholder: true, hiddenIds: [], depth, parentId, w: s, h: s, x: 0, y: 0, hasChildren: false, children: [] };
+      placeholders.push(node);
+      maxWidthByDepth[depth] = Math.max(maxWidthByDepth[depth] || 0, node.w);
       return node;
     };
     const rootNode = measure(root, 0, null);
@@ -114,10 +135,12 @@ const TreeLayout = {
 
     let width = 0;
     for (const node of order) width = Math.max(width, node.x + node.w);
+    for (const node of placeholders) width = Math.max(width, node.x + node.w);
     return {
       root: rootNode,
       nodes,
       order,
+      placeholders,
       width: width + C.toggleSize + C.margin,
       height: C.margin * 2 + rootNode.subtreeHeight,
     };

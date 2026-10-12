@@ -47,7 +47,7 @@ javascripts/               （index.html での読み込み順）
   tabBar.js                タブバー（切替・追加・削除・並べ替え）
   menuBar.js               ヘッダのメニュー
   tabSettingsDialog.js     オプション → タブの設定のモーダルダイアログ（ステータスのバッジ表示 badge() も持つ）
-  filterDialog.js          編集 → フィルタを設定のモーダルダイアログ（検索文字列・大文字小文字を区別しない・正規表現）
+  filterDialog.js          編集 → フィルタを設定のモーダルダイアログ（検索文字列・大文字小文字を区別しない・正規表現）と条件の判定。適用は Application.applyFilter
   application.js           全体の状態（文書・アクティブタブ・選択・履歴）と変更操作 commit()
   vendor/                  同梱ライブラリ・フォント（PDF 保存時のみ読み込み。内容とライセンスは vendor/README.md）
 ```
@@ -57,6 +57,9 @@ javascripts/               （index.html での読み込み順）
 - 文字入力中の内容（文字列・文字ごとのスタイル・背景色・寄せ方）は `ItemEditor` が保持し、`commitText()` でまとめて文書へ反映する。
   スタイルは `RichText.intern()` で共有したオブジェクトを参照で比較する。文字列を変えたらスタイル配列の長さも合わせること。
 - UI 状態（選択・文字入力中アイテム）は ID で保持する。Undo で文書オブジェクトが作り直されるため。
+- フィルタはタブごとの UI 状態（`Application.filters`。文書には保存しない）。[+] で隠すアイテムの ID を `hidden` に持ち、
+  `TreeLayout.compute` が連続する兄弟を 1 つの [+]（`layout.placeholders`。`order`・`nodes` には含まない）にまとめる。
+  隠れたアイテムは `Application.isFilteredOut()` で判定し、選択・コピー等の対象から除く。
 - バージョンを上げる時は `config.js` の `version` と `index.html` の `?v=` をすべて更新する。
 - `file://` で動かすため fetch/XHR でローカルファイルを読まない。追加のリソースは `<script>` で読み込む（例: `vendor/ipafont/ipag-font.js`）。
 - `vendor/ipafont/ipag-font.js`（約 5.7MB）は巨大なので Read/Grep の対象にしない。
