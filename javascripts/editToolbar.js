@@ -319,18 +319,39 @@ class SelectionDecorator {
     return this.app.selectedIds();
   }
 
-  // 最後に選択したアイテムの表示位置（折り畳みで見えなければ、その前に選択した見えるアイテム）
+  // 最後に選択したアイテムの表示位置（折り畳みで見えなければ、その前に選択した見えるアイテム）。全て選択した時は selectAllAnchor
   anchorNode(layout) {
     const app = this.app;
     const selected = [...app.selection].filter((id) => {
       const entry = app.index.get(id);
       return entry && entry.tab.id === app.activeTabId;
     });
+    if (selected.length && app.isAllSelected()) return this.selectAllAnchor(layout, selected[selected.length - 1]);
     for (let i = selected.length - 1; i >= 0; i--) {
       const node = layout.nodes.get(selected[i]);
       if (node) return node;
     }
     return null;
+  }
+
+  // 全て選択した時の表示位置：画面内のルート → 最後に選択したアイテムの先祖のうち最も近い画面内のもの →
+  // 画面内で最もルートに近い（階層が浅い。同じなら上の）もの → 画面外でもルート
+  selectAllAnchor(layout, lastId) {
+    const s = this.app.mainArea.scroller;
+    const onScreen = (n) => !!n && n.x + n.w > s.scrollLeft && n.x < s.scrollLeft + s.clientWidth
+      && n.y + n.h > s.scrollTop && n.y < s.scrollTop + s.clientHeight;
+    if (onScreen(layout.root)) return layout.root;
+    const index = this.app.index;
+    for (let e = index.get(lastId); e && e.parent; ) {
+      e = index.get(e.parent.id);
+      const node = layout.nodes.get(e.item.id);
+      if (onScreen(node)) return node;
+    }
+    let best = null;
+    for (const node of layout.order) {
+      if (onScreen(node) && (!best || node.depth < best.depth)) best = node;
+    }
+    return best || layout.root;
   }
 
   items() {
