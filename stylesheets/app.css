@@ -568,6 +568,10 @@ body.busy * {
   padding: 16px 20px;
 }
 
+.modal-dialog.tab-settings-dialog {
+  width: 860px;
+}
+
 .modal-footer {
   display: flex;
   justify-content: space-between;
@@ -641,7 +645,8 @@ body.busy * {
 
 .status-row {
   display: grid;
-  grid-template-columns: 14px 150px 90px 1fr auto;
+  /* ステータス名の欄・見本は最大 12 文字（全角）が見切れない幅 */
+  grid-template-columns: 14px calc(12em + 36px) 90px minmax(calc(12em + 32px), 1fr) auto;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;

@@ -32,7 +32,7 @@ class TabSettingsDialog {
     const C = Config;
 
     this.overlay = Util.el('div', 'modal-overlay');
-    const dialog = Util.el('div', 'modal-dialog');
+    const dialog = Util.el('div', 'modal-dialog tab-settings-dialog');
     dialog.setAttribute('role', 'dialog');
     dialog.setAttribute('aria-modal', 'true');
     dialog.setAttribute('aria-label', 'タブの設定');
