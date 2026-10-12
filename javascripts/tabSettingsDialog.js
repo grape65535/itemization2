@@ -234,6 +234,8 @@ class TabSettingsDialog {
         item.children.forEach(walk);
       };
       if (renames.size) walk(tab.root);
+      // フィルタの「表示しないステータス」も新しい名前にする
+      if (renames.size && tab.filter) tab.filter.hideStatuses = tab.filter.hideStatuses.map((n) => renames.get(n) || n);
       return { tabId };
     }, { tabId });
   }

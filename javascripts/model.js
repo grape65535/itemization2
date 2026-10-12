@@ -3,7 +3,7 @@
 // 保存データ（JSON）のツリー操作
 //   Document = { format, tabs: [Tab] }
 //   Tab      = { id, name?, root: Item, options: TabOptions, filter?: TabFilter }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
-//   TabFilter = { text, ignoreCase, regex, active }（フィルタの条件と、フィルタ中か）
+//   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active }（フィルタの条件と、フィルタ中か）
 //   TabOptions = { parentAlign: 'center'|'top', maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
 //   Item     = { id, text, collapsed, children: [Item], spans?, fill?, align?, status? }（装飾は richText.js を参照、status はステータス名）
 const Model = {
@@ -59,23 +59,52 @@ const Model = {
     };
   },
 
-  // フィルタの条件を検証・補正する。検索文字列が空・正規表現が不正なら null
+  // フィルタの条件を検証・補正する。条件が無い・正規表現が不正なら null
   normalizeFilter(raw) {
-    if (!raw || typeof raw !== 'object' || typeof raw.text !== 'string' || raw.text === '') return null;
-    const filter = { text: raw.text, ignoreCase: !!raw.ignoreCase, regex: !!raw.regex, active: !!raw.active };
+    if (!raw || typeof raw !== 'object') return null;
+    const names = Array.isArray(raw.hideStatuses) ? raw.hideStatuses.filter((n) => typeof n === 'string' && n) : [];
+    const filter = {
+      text: typeof raw.text === 'string' ? raw.text : '',
+      ignoreCase: !!raw.ignoreCase,
+      regex: !!raw.regex,
+      hideStatuses: [...new Set(names)],
+      hideUnregistered: !!raw.hideUnregistered,
+      hideNoStatus: !!raw.hideNoStatus,
+      active: !!raw.active,
+    };
+    if (!Model.filterHasCondition(filter)) return null;
     try {
-      Model.filterMatcher(filter);
+      Model.filterMatcher(filter, null);
     } catch (e) {
       return null;
     }
     return filter;
   },
 
-  // 条件に合う文字列を含むかを判定する関数を返す。正規表現が不正なら SyntaxError
-  filterMatcher(condition) {
-    const source = condition.regex ? condition.text : condition.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(source, condition.ignoreCase ? 'i' : '');
-    return (text) => re.test(text);
+  // 検索文字列があるか、表示しないステータスの条件があるか（無ければ全アイテムがヒットするため条件として扱わない）
+  filterHasCondition(filter) {
+    return filter.text !== '' || (filter.hideStatuses || []).length > 0 || !!filter.hideUnregistered || !!filter.hideNoStatus;
+  },
+
+  // アイテムが条件に合う（ヒット）かを判定する関数を返す。正規表現が不正なら SyntaxError。
+  // 文字列: 条件に合う部分を含むか（検索文字列が空なら問わない）。
+  // ステータス: タブの設定（options）にステータスが登録されている時だけ、表示しないステータス・未登録のステータス・ステータス無しを除く。
+  // 両方の条件は AND
+  filterMatcher(condition, options) {
+    let re = null;
+    if (condition.text !== '') {
+      const source = condition.regex ? condition.text : condition.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      re = new RegExp(source, condition.ignoreCase ? 'i' : '');
+    }
+    const names = new Set(options ? options.statuses.map((s) => s.name) : []);
+    const hide = new Set(condition.hideStatuses || []);
+    const statusOk = (status) => {
+      if (names.size === 0) return true;
+      if (!status) return !condition.hideNoStatus;
+      if (names.has(status)) return !hide.has(status);
+      return !condition.hideUnregistered;
+    };
+    return (item) => statusOk(item.status) && (!re || re.test(item.text));
   },
 
   // フィルタをかけた時の表示：条件に合うアイテム（ヒット）とその祖先・ルートを表示し、
@@ -86,14 +115,14 @@ const Model = {
     const visit = (item) => {
       let found = false;
       for (const child of item.children) found = visit(child) || found;
-      const hit = test(item.text);
+      const hit = test(item);
       if (hit || found || item === root) below.set(item.id, found);
       return hit || found;
     };
     visit(root);
     const plan = { hidden: new Set(), expand: new Set(), collapse: new Set() };
     const walk = (item) => {
-      if (below.get(item.id) || (item === root && !test(item.text))) {
+      if (below.get(item.id) || (item === root && !test(item))) {
         if (item.children.length) plan.expand.add(item.id);
         for (const child of item.children) {
           if (below.has(child.id)) walk(child);

@@ -458,14 +458,14 @@ class Application {
   refilterTabs(tabs) {
     for (const tab of tabs) {
       if (!tab.filter || !tab.filter.active) continue;
-      const plan = Model.filterPlan(tab.root, Model.filterMatcher(tab.filter));
+      const plan = Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options));
       Model.applyFilterCollapse(tab.root, plan);
       this.filters.set(tab.id, { key: Application.filterKey(tab.filter), hidden: plan.hidden });
     }
   }
 
   static filterKey(filter) {
-    return JSON.stringify([filter.text, filter.ignoreCase, filter.regex]);
+    return JSON.stringify([filter.text, filter.ignoreCase, filter.regex, filter.hideStatuses, filter.hideUnregistered, filter.hideNoStatus]);
   }
 
   // 文書のフィルタ状態（Undo/Redo などで変わる）に、[+] で隠すアイテムを合わせる。
@@ -478,7 +478,7 @@ class Application {
       const key = Application.filterKey(tab.filter);
       const entry = this.filters.get(tab.id);
       if (entry && entry.key === key) continue;
-      this.filters.set(tab.id, { key, hidden: Model.filterPlan(tab.root, Model.filterMatcher(tab.filter)).hidden });
+      this.filters.set(tab.id, { key, hidden: Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options)).hidden });
     }
     for (const id of [...this.filters.keys()]) {
       if (!tabIds.has(id)) this.filters.delete(id);

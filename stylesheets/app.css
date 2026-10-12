@@ -741,7 +741,7 @@ body.busy * {
 
 /* ---- フィルタを設定 ---- */
 .modal-dialog.filter-dialog {
-  width: 480px;
+  width: 520px;
 }
 
 .filter-row {
@@ -782,4 +782,53 @@ body.busy * {
 
 .filter-error {
   margin-top: 8px;
+}
+
+/* 表示するステータスのチェックボックス */
+.filter-statuses {
+  margin-top: 16px;
+}
+
+.filter-statuses-title {
+  margin-bottom: 4px;
+  font-weight: bold;
+}
+
+.filter-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  min-height: 28px;
+  cursor: pointer;
+}
+
+.filter-check input {
+  flex: none;
+  margin: 0;
+  cursor: pointer;
+}
+
+.filter-check .status-badge {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 1 列目に 1〜6、2 列目に 7〜12（行数は gridTemplateRows で指定） */
+.filter-status-grid,
+.filter-status-extra {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  column-gap: 16px;
+  margin-left: 22px;
+}
+
+.filter-status-grid {
+  grid-auto-flow: column;
+}
+
+.filter-status-extra {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed #dde2e8;
 }
