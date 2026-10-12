@@ -212,9 +212,10 @@ class MainArea {
         const t = TreeLayout.toggleRect(n);
         if (p.x >= t.x - 2 && p.x <= t.x + t.w + 2 && p.y >= t.y - 2 && p.y <= t.y + t.h + 2) return { type: 'toggle', id: n.id };
       }
-      // 枠線（1px）とその両側 b px を「枠」とみなす
+      // 枠線（1px）とその両側 b px を「枠」とみなす。ステータスのバッジの行（文字列より上）も枠と同じ扱い
       if (p.x >= n.x - b && p.x < n.x + n.w + b && p.y >= n.y - b && p.y < n.y + n.h + b) {
-        const inner = p.x >= n.x + 1 + b && p.x < n.x + n.w - 1 - b && p.y >= n.y + 1 + b && p.y < n.y + n.h - 1 - b;
+        const top = n.status ? Math.max(n.y + 1 + b, n.y + Config.paddingY + n.lines[0].top) : n.y + 1 + b;
+        const inner = p.x >= n.x + 1 + b && p.x < n.x + n.w - 1 - b && p.y >= top && p.y < n.y + n.h - 1 - b;
         return { type: 'item', id: n.id, part: inner ? 'inner' : 'border' };
       }
     }
