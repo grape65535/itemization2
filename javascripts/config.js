@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.2.10',
+  version: 'v2.2.11',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',
@@ -99,6 +99,8 @@ const Config = {
   // 文字入力中のツールバーの高さ(px)とアイテムとの間隔
   toolbarHeight: 30,
   toolbarGap: 6,
+  // メインエリアの右上に重ねる表示（フィルタ中の漏斗・複数選択中のツールバー）の、端からの間隔
+  overlayMargin: 8,
 
   get font() {
     return `${this.fontSize}px ${this.fontFamily}`;

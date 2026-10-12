@@ -391,14 +391,6 @@ class Application {
       .sort((a, b) => this.index.get(a).order - this.index.get(b).order);
   }
 
-  // 「全て選択」した直後の選択のままか（装飾のツールバーの表示位置に使う）
-  isAllSelected() {
-    const all = this.allSelectedIds;
-    if (!all || all.size !== this.selection.size) return false;
-    for (const id of all) if (!this.selection.has(id)) return false;
-    return true;
-  }
-
   selectAll() {
     this.editor.end();
     this.selection.clear();
@@ -409,7 +401,6 @@ class Application {
       item.children.forEach(walk);
     };
     walk(this.activeTab.root);
-    this.allSelectedIds = new Set(this.selection);
     this.mainArea.draw();
   }
 

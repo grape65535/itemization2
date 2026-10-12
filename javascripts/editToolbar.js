@@ -90,8 +90,14 @@ class EditToolbar {
     this.tooltipTimer = setTimeout(() => {
       this.tooltip.textContent = button.dataset.tooltip;
       this.tooltip.dataset.for = button.dataset.id;
-      this.tooltip.style.left = button.offsetLeft + button.offsetWidth / 2 + 'px';
+      const center = button.offsetLeft + button.offsetWidth / 2;
+      this.tooltip.style.left = center + 'px';
       this.el.append(this.tooltip);
+      // 右上に表示中はツールチップを下に出し、右端からはみ出さないよう左へずらす
+      if (this.el.classList.contains('corner')) {
+        const half = this.tooltip.offsetWidth / 2;
+        this.tooltip.style.left = Math.min(center, this.el.clientWidth - half) + 'px';
+      }
     }, 400);
   }
 
@@ -197,12 +203,14 @@ class EditToolbar {
     return true;
   }
 
-  // 文字入力中以外の表示：選択中のアイテムがあれば最後に選択したアイテムの上に表示し、無ければ隠す
+  // 文字入力中以外の表示：1 つ選択中ならそのアイテムの上、複数選択中ならメインエリアの右上（スクロールしても動かない）に表示し、
+  // 選択が無ければ隠す
   syncSelection() {
     if (this.editor.isEditing) return;
     const area = this.area;
     const ids = this.selectionDecorator.ids();
-    const node = area.layout && !(area.drag && area.drag.type !== 'pending') ? this.selectionDecorator.anchorNode(area.layout) : null;
+    const active = area.layout && !(area.drag && area.drag.type !== 'pending');
+    const node = !active ? null : ids.length >= 2 ? 'corner' : this.selectionDecorator.anchorNode(area.layout);
     if (!node) {
       this.dismissedKey = null;
       this.hide();
@@ -224,7 +232,8 @@ class EditToolbar {
     this.dismissedKey = null;
   }
 
-  // アイテムの上に表示する（上に余地が無ければ下。横はアイテムの中央）。key は表示対象を表す文字列。× で閉じていれば表示せず false
+  // アイテムの上に表示する（上に余地が無ければ下。横はアイテムの中央）。node が 'corner' ならメインエリアの右上
+  // （フィルタ中は漏斗のアイコンの左）。key は表示対象を表す文字列。× で閉じていれば表示せず false
   show(node, key = 'edit:' + node.id) {
     if (this.dismissedKey !== null && this.dismissedKey !== key) {
       // 文字入力中に閉じた後、入力を終えて同じアイテムが選択されたままなら閉じたままにする
@@ -239,6 +248,16 @@ class EditToolbar {
     this.shownKey = key;
     const C = Config;
     const scroller = this.area.scroller;
+    this.el.classList.toggle('corner', node === 'corner');
+    if (node === 'corner') {
+      const margin = C.overlayMargin;
+      const indicator = this.area.filterIndicator;
+      const right = margin + (indicator.hidden ? 0 : indicator.offsetWidth + margin);
+      this.el.style.display = 'flex';
+      this.el.style.top = scroller.scrollTop + margin + 'px';
+      this.el.style.left = Math.max(scroller.scrollLeft + margin, scroller.scrollLeft + scroller.clientWidth - this.el.offsetWidth - right) + 'px';
+      return true;
+    }
     let top = node.y - C.toolbarHeight - C.toolbarGap;
     if (top < scroller.scrollTop) top = node.y + node.h + C.toolbarGap;
     this.el.style.display = 'flex';
@@ -319,49 +338,18 @@ class SelectionDecorator {
     return this.app.selectedIds();
   }
 
-  // 表示位置：選択中のアイテムのうち、画面内にある最後に選択したもの（スクロールで選び直す）。
-  // 画面内に無ければ、最後に選択したアイテム（折り畳みで見えなければ、その前に選択した見えるアイテム）。全て選択した時は selectAllAnchor
+  // 最後に選択したアイテムの表示位置（折り畳みで見えなければ、その前に選択した見えるアイテム）
   anchorNode(layout) {
     const app = this.app;
     const selected = [...app.selection].filter((id) => {
       const entry = app.index.get(id);
       return entry && entry.tab.id === app.activeTabId;
     });
-    if (selected.length && app.isAllSelected()) return this.selectAllAnchor(layout, selected[selected.length - 1]);
-    for (let i = selected.length - 1; i >= 0; i--) {
-      const node = layout.nodes.get(selected[i]);
-      if (this.onScreen(node)) return node;
-    }
     for (let i = selected.length - 1; i >= 0; i--) {
       const node = layout.nodes.get(selected[i]);
       if (node) return node;
     }
     return null;
-  }
-
-  // 全て選択した時の表示位置：画面内のルート → 最後に選択したアイテムの先祖のうち最も近い画面内のもの →
-  // 画面内で最もルートに近い（階層が浅い。同じなら上の）もの → 画面外でもルート
-  selectAllAnchor(layout, lastId) {
-    const onScreen = (n) => this.onScreen(n);
-    if (onScreen(layout.root)) return layout.root;
-    const index = this.app.index;
-    for (let e = index.get(lastId); e && e.parent; ) {
-      e = index.get(e.parent.id);
-      const node = layout.nodes.get(e.item.id);
-      if (onScreen(node)) return node;
-    }
-    let best = null;
-    for (const node of layout.order) {
-      if (onScreen(node) && (!best || node.depth < best.depth)) best = node;
-    }
-    return best || layout.root;
-  }
-
-  // アイテムの一部でもメインエリアの表示範囲に入っているか
-  onScreen(n) {
-    const s = this.app.mainArea.scroller;
-    return !!n && n.x + n.w > s.scrollLeft && n.x < s.scrollLeft + s.clientWidth
-      && n.y + n.h > s.scrollTop && n.y < s.scrollTop + s.clientHeight;
   }
 
   items() {

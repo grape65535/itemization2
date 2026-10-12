@@ -120,7 +120,7 @@ class MainArea {
   updateFilterIndicator() {
     const el = this.filterIndicator;
     el.hidden = !this.app.activeFilter;
-    el.style.right = this.container.clientWidth - this.scroller.clientWidth + 8 + 'px';
+    el.style.right = this.container.clientWidth - this.scroller.clientWidth + Config.overlayMargin + 'px';
   }
 
   // 見えない TEXTAREA をカーソル位置に、ツールバーをアイテムの上（隠れる場合は下）に置く
