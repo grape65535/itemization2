@@ -572,15 +572,6 @@ body.busy * {
   width: 830px;
 }
 
-.tab-settings-dialog .settings-range {
-  flex: none;
-}
-
-.tab-settings-dialog .settings-range input {
-  flex: none;
-  width: 450px;
-}
-
 .modal-footer {
   display: flex;
   justify-content: space-between;
