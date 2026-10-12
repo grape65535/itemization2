@@ -569,7 +569,16 @@ body.busy * {
 }
 
 .modal-dialog.tab-settings-dialog {
-  width: 860px;
+  width: 830px;
+}
+
+.tab-settings-dialog .settings-range {
+  flex: none;
+}
+
+.tab-settings-dialog .settings-range input {
+  flex: none;
+  width: 450px;
 }
 
 .modal-footer {
@@ -645,8 +654,9 @@ body.busy * {
 
 .status-row {
   display: grid;
-  /* ステータス名の欄・見本は最大 12 文字（全角）が見切れない幅 */
-  grid-template-columns: 14px calc(12em + 36px) 90px minmax(calc(12em + 32px), 1fr) auto;
+  /* ステータス名の欄・見本は最大 12 文字（全角 14px）が見切れない幅。
+     見出し行は文字が小さいため em ではなく px で指定して列位置を揃える */
+  grid-template-columns: 14px 204px 90px 204px auto;
   align-items: center;
   gap: 8px;
   margin-bottom: 6px;
@@ -732,6 +742,7 @@ body.busy * {
 
 .status-remove {
   height: 26px;
+  white-space: nowrap;
   padding: 0 10px;
 }
 
