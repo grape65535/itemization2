@@ -17,7 +17,8 @@ class FilterDialog {
     const app = this.app;
     app.finishInput();
     app.menuBar.closeAll();
-    const current = app.filterCondition || { text: '', ignoreCase: false, regex: false };
+    // 初期値は表示タブに記録した条件（無ければ最後に適用した条件）
+    const current = app.activeTab.filter || app.filterCondition || { text: '', ignoreCase: false, regex: false };
 
     this.overlay = Util.el('div', 'modal-overlay');
     const dialog = Util.el('div', 'modal-dialog filter-dialog');
@@ -87,28 +88,20 @@ class FilterDialog {
     return button.getAttribute('aria-pressed') === 'true';
   }
 
-  // 条件に合う文字列を含むかを判定する関数を返す。正規表現が不正なら SyntaxError
-  static matcher(condition) {
-    const source = condition.regex ? condition.text : condition.text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const re = new RegExp(source, condition.ignoreCase ? 'i' : '');
-    return (text) => re.test(text);
-  }
-
   // 入力を検証してフィルタを適用する（検索文字列が空・正規表現が不正ならメッセージを表示し、閉じない）
   submit(condition) {
     if (condition.text === '') {
       this.showError('検索する文字列を入力してください');
       return;
     }
-    let test;
     try {
-      test = FilterDialog.matcher(condition);
+      Model.filterMatcher(condition);
     } catch (e) {
       this.showError('正規表現が正しくありません: ' + e.message);
       return;
     }
     this.close();
-    this.app.applyFilter(condition, test);
+    this.app.applyFilter(condition);
   }
 
   showError(message) {

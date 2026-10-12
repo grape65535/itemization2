@@ -57,7 +57,8 @@ javascripts/               （index.html での読み込み順）
 - 文字入力中の内容（文字列・文字ごとのスタイル・背景色・寄せ方）は `ItemEditor` が保持し、`commitText()` でまとめて文書へ反映する。
   スタイルは `RichText.intern()` で共有したオブジェクトを参照で比較する。文字列を変えたらスタイル配列の長さも合わせること。
 - UI 状態（選択・文字入力中アイテム）は ID で保持する。Undo で文書オブジェクトが作り直されるため。
-- フィルタはタブごとの UI 状態（`Application.filters`。文書には保存しない）。[+] で隠すアイテムの ID を `hidden` に持ち、
+- フィルタの条件とフィルタ中か（`active`）は文書のタブ（`tab.filter`）に保存する。[+] で隠すアイテムは UI 状態（`Application.filters`）で、
+  `commit()`・Undo/Redo 後に `syncFilters()`、起動時・ファイルを開いた時に `refilterTabs()` で作り直す。[+] で隠すアイテムの ID を `hidden` に持ち、
   `TreeLayout.compute` が連続する兄弟を 1 つの [+]（`layout.placeholders`。`order`・`nodes` には含まない）にまとめる。
   隠れたアイテムは `Application.isFilteredOut()` で判定し、選択・コピー等の対象から除く。
 - バージョンを上げる時は `config.js` の `version` と `index.html` の `?v=` をすべて更新する。

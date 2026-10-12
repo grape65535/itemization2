@@ -4,6 +4,12 @@
 class Application {
   constructor(rootEl) {
     this.doc = Storage.loadDocument() || Model.createDocument();
+    this.filters = new Map(); // タブ ID -> フィルタ中の表示 { key: 条件, hidden: [+] で隠すアイテムの ID の Set }（[+] の展開状態は保存しない）
+    // 再読み込み前にフィルタ中だったタブは、記録した条件でフィルタをかけた状態から始める
+    if (this.doc.tabs.some((t) => t.filter && t.filter.active)) {
+      this.refilterTabs(this.doc.tabs);
+      Storage.saveDocument(JSON.stringify(this.doc));
+    }
     this.reindex();
     const ui = Storage.loadUi();
     this.activeTabId = this.findTab(ui.activeTabId) ? ui.activeTabId : this.doc.tabs[0].id;
@@ -25,8 +31,7 @@ class Application {
     this.mainArea = new MainArea(this, main);
     this.tabSettings = new TabSettingsDialog(this);
     this.filterDialog = new FilterDialog(this);
-    this.filterCondition = null; // 最後に適用したフィルタの条件 { text, ignoreCase, regex }（ダイアログの初期値）
-    this.filters = new Map(); // タブ ID -> 適用中のフィルタ { condition, hidden: [+] で隠すアイテムの ID の Set }（文書には保存しない）
+    this.filterCondition = null; // 最後に適用したフィルタの条件 { text, ignoreCase, regex }（タブに条件が無い時のダイアログの初期値）
 
     // ファイルを開く（OS 標準のダイアログ）・画面へのドロップ
     this.fileInput = Util.el('input', 'file-input');
@@ -115,6 +120,7 @@ class Application {
     const beforeHint = { tabId: hint.tabId || this.activeTabId, itemId: hint.itemId || null };
     const result = fn(this.doc) || {};
     this.reindex();
+    this.syncFilters();
     const after = JSON.stringify(this.doc);
     if (before === after) return false;
     this.history.push({
@@ -144,6 +150,7 @@ class Application {
   restore(json, hint) {
     this.doc = JSON.parse(json);
     this.reindex();
+    this.syncFilters();
     if (hint.tabId && this.findTab(hint.tabId)) this.setActiveTab(hint.tabId);
     else if (!this.activeTab) this.setActiveTab(this.doc.tabs[0].id);
     for (const id of [...this.selection]) {
@@ -285,6 +292,7 @@ class Application {
       }
       this.finishInput();
       this.commit((doc) => {
+        this.refilterTabs(tabs); // フィルタ中で保存されたタブは、フィルタをかけた状態で開く
         doc.tabs.push(...tabs);
         this.setActiveTab(tabs[tabs.length - 1].id);
         return { tabId: this.activeTabId };
@@ -426,48 +434,16 @@ class Application {
     return false;
   }
 
-  // 表示タブにフィルタを適用する。条件に合うアイテム（ヒット）とその祖先・ルートを表示し、
-  // それらの子のうちヒットを含まない兄弟は [+] で隠す。ヒットを子孫に含まないヒットは折り畳む（祖先は展開する）。
-  // 折り畳みの変更は 1 回の Undo で戻る。表示されなくなったアイテムの選択は解除する
-  applyFilter(condition, test) {
+  // 表示タブにフィルタを適用する（Model.filterPlan）。条件とフィルタ中であることをタブに記録し、
+  // 折り畳み状態の変更とあわせて 1 回の Undo で戻る。表示されなくなったアイテムの選択は解除する
+  applyFilter(condition) {
     this.finishInput();
-    const tab = this.activeTab;
-    const tabId = tab.id;
-    const shown = new Map(); // 表示するアイテムの ID -> 子孫にヒットを含むか
-    const visit = (item) => {
-      let below = false;
-      for (const child of item.children) below = visit(child) || below;
-      const hit = test(item.text);
-      if (hit || below || item === tab.root) shown.set(item.id, below);
-      return hit || below;
-    };
-    visit(tab.root);
-    const hidden = new Set();
-    const expand = new Set();
-    const collapse = new Set();
-    const walk = (item) => {
-      const below = shown.get(item.id);
-      // ヒットを含まないルートも展開して、子を [+] で隠す
-      if (below || (item === tab.root && !test(item.text))) {
-        if (item.children.length) expand.add(item.id);
-        for (const child of item.children) {
-          if (shown.has(child.id)) walk(child);
-          else hidden.add(child.id);
-        }
-      } else if (item.children.length) {
-        collapse.add(item.id);
-      }
-    };
-    walk(tab.root);
+    const tabId = this.activeTabId;
     this.filterCondition = condition;
-    this.filters.set(tabId, { condition, hidden });
     const changed = this.commit((doc) => {
-      const apply = (item) => {
-        if (expand.has(item.id)) item.collapsed = false;
-        if (collapse.has(item.id)) item.collapsed = true;
-        item.children.forEach(apply);
-      };
-      apply(doc.tabs.find((t) => t.id === tabId).root);
+      const tab = doc.tabs.find((t) => t.id === tabId);
+      tab.filter = Object.assign({}, condition, { active: true });
+      this.refilterTabs([tab]);
       return { tabId };
     }, { tabId });
     if (!changed) this.refresh();
@@ -475,6 +451,38 @@ class Application {
       if (!this.mainArea.layout.nodes.has(id)) this.selection.delete(id);
     }
     this.mainArea.draw();
+  }
+
+  // フィルタ中のタブにフィルタをかけ直す（適用時・起動時・ファイルを開いた時）。
+  // [+] の展開状態は記憶しないため、ヒットしないアイテムを隠し直し、折り畳み状態も適用時と同じにする
+  refilterTabs(tabs) {
+    for (const tab of tabs) {
+      if (!tab.filter || !tab.filter.active) continue;
+      const plan = Model.filterPlan(tab.root, Model.filterMatcher(tab.filter));
+      Model.applyFilterCollapse(tab.root, plan);
+      this.filters.set(tab.id, { key: Application.filterKey(tab.filter), hidden: plan.hidden });
+    }
+  }
+
+  static filterKey(filter) {
+    return JSON.stringify([filter.text, filter.ignoreCase, filter.regex]);
+  }
+
+  // 文書のフィルタ状態（Undo/Redo などで変わる）に、[+] で隠すアイテムを合わせる。
+  // 条件が同じなら [+] の展開状態を保ち、変わったら（折り畳み状態は変えずに）隠し直す
+  syncFilters() {
+    const tabIds = new Set();
+    for (const tab of this.doc.tabs) {
+      if (!tab.filter || !tab.filter.active) continue;
+      tabIds.add(tab.id);
+      const key = Application.filterKey(tab.filter);
+      const entry = this.filters.get(tab.id);
+      if (entry && entry.key === key) continue;
+      this.filters.set(tab.id, { key, hidden: Model.filterPlan(tab.root, Model.filterMatcher(tab.filter)).hidden });
+    }
+    for (const id of [...this.filters.keys()]) {
+      if (!tabIds.has(id)) this.filters.delete(id);
+    }
   }
 
   // フィルタの [+] をクリック：隠れていたアイテムを表示する（再び隠すにはフィルタを適用し直す）
@@ -485,10 +493,15 @@ class Application {
     this.mainArea.render();
   }
 
-  // 表示タブのフィルタを削除し、隠していたアイテムをすべて表示する（折り畳み状態はそのまま）
+  // 表示タブのフィルタを解除し、隠していたアイテムをすべて表示する（条件はタブに残す。折り畳み状態はそのまま）
   clearFilter() {
-    this.filters.delete(this.activeTabId);
-    this.mainArea.render();
+    this.finishInput();
+    const tabId = this.activeTabId;
+    this.commit((doc) => {
+      const tab = doc.tabs.find((t) => t.id === tabId);
+      if (tab.filter) tab.filter.active = false;
+      return { tabId };
+    }, { tabId });
   }
 
   onClipboardEvent(e, type) {
