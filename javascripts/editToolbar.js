@@ -319,7 +319,8 @@ class SelectionDecorator {
     return this.app.selectedIds();
   }
 
-  // 最後に選択したアイテムの表示位置（折り畳みで見えなければ、その前に選択した見えるアイテム）。全て選択した時は selectAllAnchor
+  // 表示位置：選択中のアイテムのうち、画面内にある最後に選択したもの（スクロールで選び直す）。
+  // 画面内に無ければ、最後に選択したアイテム（折り畳みで見えなければ、その前に選択した見えるアイテム）。全て選択した時は selectAllAnchor
   anchorNode(layout) {
     const app = this.app;
     const selected = [...app.selection].filter((id) => {
@@ -327,6 +328,10 @@ class SelectionDecorator {
       return entry && entry.tab.id === app.activeTabId;
     });
     if (selected.length && app.isAllSelected()) return this.selectAllAnchor(layout, selected[selected.length - 1]);
+    for (let i = selected.length - 1; i >= 0; i--) {
+      const node = layout.nodes.get(selected[i]);
+      if (this.onScreen(node)) return node;
+    }
     for (let i = selected.length - 1; i >= 0; i--) {
       const node = layout.nodes.get(selected[i]);
       if (node) return node;
@@ -337,9 +342,7 @@ class SelectionDecorator {
   // 全て選択した時の表示位置：画面内のルート → 最後に選択したアイテムの先祖のうち最も近い画面内のもの →
   // 画面内で最もルートに近い（階層が浅い。同じなら上の）もの → 画面外でもルート
   selectAllAnchor(layout, lastId) {
-    const s = this.app.mainArea.scroller;
-    const onScreen = (n) => !!n && n.x + n.w > s.scrollLeft && n.x < s.scrollLeft + s.clientWidth
-      && n.y + n.h > s.scrollTop && n.y < s.scrollTop + s.clientHeight;
+    const onScreen = (n) => this.onScreen(n);
     if (onScreen(layout.root)) return layout.root;
     const index = this.app.index;
     for (let e = index.get(lastId); e && e.parent; ) {
@@ -352,6 +355,13 @@ class SelectionDecorator {
       if (onScreen(node) && (!best || node.depth < best.depth)) best = node;
     }
     return best || layout.root;
+  }
+
+  // アイテムの一部でもメインエリアの表示範囲に入っているか
+  onScreen(n) {
+    const s = this.app.mainArea.scroller;
+    return !!n && n.x + n.w > s.scrollLeft && n.x < s.scrollLeft + s.clientWidth
+      && n.y + n.h > s.scrollTop && n.y < s.scrollTop + s.clientHeight;
   }
 
   items() {
