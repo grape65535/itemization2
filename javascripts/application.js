@@ -236,7 +236,8 @@ class Application {
       });
       const t = Model.locate(doc, target.id);
       if (target.mode === 'child') {
-        t.item.collapsed = false;
+        // 子のあるアイテムが折り畳み中なら折り畳んだまま（子が無ければ、移動したアイテムが見えるよう展開する）
+        if (t.item.children.length === 0) t.item.collapsed = false;
         t.item.children.push(...items);
       } else {
         t.parent.children.splice(t.index + (target.mode === 'after' ? 1 : 0), 0, ...items);
