@@ -78,6 +78,7 @@ class MenuBar {
     const pick = (label) => editItems.find((d) => d.label === label);
     this.contextItems = [
       pick('コピー'), pick('切り取り'), pick('貼り付け'), { separator: true },
+      pick('アイテムを追加'), pick('アイテムを削除'), { separator: true },
       pick('ステータスを設定'), pick('ステータスを削除'), { separator: true },
       pick('フィルタを設定'), pick('フィルタを削除'),
     ];

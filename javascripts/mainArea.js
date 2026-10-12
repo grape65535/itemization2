@@ -302,12 +302,14 @@ class MainArea {
       }
       this.drag = { type: 'pending', id: hit.id, part: hit.part, link, start: p, client: { x: e.clientX, y: e.clientY } };
     } else if (modifier) {
-      this.drag = { type: 'marquee', start: p, current: p, rect: null, candidates: new Set() };
-    } else {
+      // SHIFT / CTRL を押しながらアイテム以外をドラッグ：スクロール
       this.drag = {
         type: 'pan', client: { x: e.clientX, y: e.clientY },
         scroll: { x: this.scroller.scrollLeft, y: this.scroller.scrollTop }, moved: false,
       };
+    } else {
+      // アイテム以外をドラッグ：範囲選択（ドラッグせずに離せば選択を解除）
+      this.drag = { type: 'marquee', start: p, current: p, rect: null, candidates: new Set(), client: { x: e.clientX, y: e.clientY }, moved: false };
     }
   }
 
@@ -364,6 +366,8 @@ class MainArea {
         }
         break;
       case 'marquee':
+        if (!d.moved && dist(d.client) < Config.dragThreshold) break;
+        d.moved = true;
         this.autoScroll(e);
         d.current = this.toContent(e);
         this.updateMarquee();
@@ -398,12 +402,9 @@ class MainArea {
         else this.draw();
         break;
       case 'pan':
-        if (!d.moved) {
-          sel.clear();
-          this.draw();
-        }
         break;
       case 'marquee':
+        if (!d.moved) sel.clear();
         for (const id of d.candidates) sel.add(id);
         this.draw();
         break;
