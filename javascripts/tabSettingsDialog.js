@@ -68,7 +68,7 @@ class TabSettingsDialog {
     // ステータス（0〜12 個）
     const statusSection = Util.el('div', 'settings-statuses');
     const header = Util.el('div', 'status-row status-header');
-    header.append(Util.el('span', '', 'ステータス名'), Util.el('span', '', '色'), Util.el('span', '', '見本'), Util.el('span', ''));
+    header.append(Util.el('span', ''), Util.el('span', '', 'ステータス名'), Util.el('span', '', '色'), Util.el('span', '', '見本'), Util.el('span', ''));
     this.statusList = Util.el('div', 'status-list');
     this.addButton = Util.el('button', 'settings-button status-add', '＋ 追加');
     this.addButton.type = 'button';
@@ -148,10 +148,44 @@ class TabSettingsDialog {
       this.updateAddButton();
     });
     refresh();
-    row.append(name, color, sample, remove);
+    // 先頭のつまみを上下にドラッグして順序を入れ替える
+    const grip = Util.el('span', 'status-grip');
+    grip.title = 'ドラッグで順序を入れ替え';
+    grip.setAttribute('aria-hidden', 'true');
+    grip.addEventListener('pointerdown', (e) => this.startReorder(e, row));
+    row.append(grip, name, color, sample, remove);
     this.statusList.append(row);
     this.updateAddButton();
     return row;
+  }
+
+  // ステータスの行のドラッグ：ポインタが他の行の縦中央を越えたら、その位置へ行を移す
+  startReorder(e, row) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    // 行を DOM 内で移すとポインタのキャプチャが外れるため、window で追う
+    row.classList.add('dragging');
+    const move = (ev) => {
+      const rows = [...this.statusList.children].filter((r) => r !== row);
+      const before = rows.find((r) => {
+        const rect = r.getBoundingClientRect();
+        return ev.clientY < rect.top + rect.height / 2;
+      });
+      if (before) {
+        if (row.nextElementSibling !== before) this.statusList.insertBefore(row, before);
+      } else if (this.statusList.lastElementChild !== row) {
+        this.statusList.append(row);
+      }
+    };
+    const end = () => {
+      row.classList.remove('dragging');
+      window.removeEventListener('pointermove', move);
+      window.removeEventListener('pointerup', end);
+      window.removeEventListener('pointercancel', end);
+    };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', end);
+    window.addEventListener('pointercancel', end);
   }
 
   updateAddButton() {
