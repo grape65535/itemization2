@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.2.7',
+  version: 'v2.2.8',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',
@@ -29,6 +29,8 @@ const Config = {
   margin: 24,
   horizontalGap: 48,
   verticalGap: 10,
+  // 親アイテムがスクロールに追従する時の、メインエリアの上端・下端との間隔
+  followScrollGap: 8,
 
   // [+][-] アイコン
   toggleSize: 12,

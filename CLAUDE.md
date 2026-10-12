@@ -61,6 +61,8 @@ javascripts/               （index.html での読み込み順）
   `commit()`・Undo/Redo 後に `syncFilters()`、起動時・ファイルを開いた時に `refilterTabs()` で作り直す。[+] で隠すアイテムの ID を `hidden` に持ち、
   `TreeLayout.compute` が連続する兄弟を 1 つの [+]（`layout.placeholders`。`order`・`nodes` には含まない）にまとめる。
   隠れたアイテムは `Application.isFilteredOut()` で判定し、選択・コピー等の対象から除く。
+- 「スクロールに追従する」は `MainArea.followScroll()` が配置どおりの `node.baseY` から `node.y` を書き換える（描画・ヒットテスト・文字入力は node.y を使うので追従する）。
+  SVG/PDF は `MainArea.exportScene()` で baseY の位置から作る。
 - バージョンを上げる時は `config.js` の `version` と `index.html` の `?v=` をすべて更新する。
 - `file://` で動かすため fetch/XHR でローカルファイルを読まない。追加のリソースは `<script>` で読み込む（例: `vendor/ipafont/ipag-font.js`）。
 - `vendor/ipafont/ipag-font.js`（約 5.7MB）は巨大なので Read/Grep の対象にしない。

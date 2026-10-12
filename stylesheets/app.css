@@ -605,6 +605,24 @@ body.busy * {
   padding-top: 4px;
 }
 
+.settings-inline {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.settings-check {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.settings-check input {
+  margin: 0;
+  cursor: pointer;
+}
+
 .settings-select,
 .settings-input {
   height: 28px;

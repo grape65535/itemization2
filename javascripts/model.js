@@ -4,7 +4,7 @@
 //   Document = { format, tabs: [Tab] }
 //   Tab      = { id, name?, root: Item, options: TabOptions, filter?: TabFilter }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
 //   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active }（フィルタの条件と、フィルタ中か）
-//   TabOptions = { parentAlign: 'center'|'top', maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
+//   TabOptions = { parentAlign: 'center'|'top', followScroll, maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
 //   Item     = { id, text, collapsed, children: [Item], spans?, fill?, align?, status? }（装飾は richText.js を参照、status はステータス名）
 const Model = {
   FORMAT: 1,
@@ -54,6 +54,7 @@ const Model = {
       : C.defaultStatuses.map((s) => Object.assign({}, s));
     return {
       parentAlign: o.parentAlign === 'top' ? 'top' : 'center',
+      followScroll: !!o.followScroll,
       maxWidth: Number.isFinite(width) ? Util.clamp(width, minW, maxW) : C.maxContentWidth,
       statuses,
     };

@@ -34,6 +34,7 @@ class MainArea {
     this.scrollPositions = new Map();
 
     this.scroller.addEventListener('scroll', () => {
+      this.followScroll();
       this.positionEditor();
       this.draw();
     });
@@ -79,9 +80,40 @@ class MainArea {
       this.scroller.scrollTop = pos.y;
       this.renderedTabId = tab.id;
     }
+    this.followScroll();
     this.positionEditor();
     this.updateFilterIndicator();
     this.draw();
+  }
+
+  // タブの設定「スクロールに追従する」：子のあるアイテムが縦スクロールで表示範囲から出る場合、表示範囲内に収まるよう動かす。
+  // 動かせるのは可視の子孫のうち最上部のアイテムの上端〜最下部のアイテムの下端まで。node.y を書き換えるため、描画・ヒットテスト等はそのまま追従する
+  followScroll() {
+    const layout = this.layout;
+    if (!layout) return;
+    const follow = this.app.activeTab.options.followScroll;
+    const gap = Config.followScrollGap;
+    const viewTop = this.scroller.scrollTop + gap;
+    const viewBottom = this.scroller.scrollTop + this.scroller.clientHeight - gap;
+    for (const node of layout.order) {
+      let y = node.baseY;
+      if (follow && node.children.length > 0) {
+        if (y < viewTop) y = viewTop;
+        else if (y + node.h > viewBottom) y = Math.max(viewBottom - node.h, viewTop);
+        const lo = Math.min(node.descTop, node.baseY);
+        const hi = Math.max(node.descBottom - node.h, node.baseY);
+        y = Math.min(Math.max(y, lo), hi);
+      }
+      node.y = y;
+    }
+  }
+
+  // SVG/PDF 用の図形（スクロールの追従は除き、配置どおりの位置で作る）
+  exportScene() {
+    for (const node of this.layout.order) node.y = node.baseY;
+    const scene = FileExport.scene(this.layout);
+    this.followScroll();
+    return scene;
   }
 
   // フィルタ中だけ漏斗のアイコンを表示する（スクロールバーに重ならないよう、その内側に置く）

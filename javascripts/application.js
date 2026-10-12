@@ -311,7 +311,7 @@ class Application {
   saveSvg() {
     this.finishInput();
     const tab = this.activeTab;
-    const svg = FileExport.buildSvg(FileExport.scene(this.mainArea.layout), FileExport.tabJson(tab));
+    const svg = FileExport.buildSvg(this.mainArea.exportScene(), FileExport.tabJson(tab));
     FileExport.download(new Blob([svg], { type: 'image/svg+xml' }), FileExport.fileName(this.tabTitle(tab), '.svg'));
   }
 
@@ -319,7 +319,7 @@ class Application {
   async savePdf() {
     this.finishInput();
     const tab = this.activeTab;
-    const scene = FileExport.scene(this.mainArea.layout);
+    const scene = this.mainArea.exportScene();
     document.body.classList.add('busy');
     try {
       const bytes = await FileExport.buildPdf(scene);

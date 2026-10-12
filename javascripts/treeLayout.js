@@ -132,6 +132,21 @@ const TreeLayout = {
     };
     place(rootNode);
     assign(rootNode, C.margin);
+    // 配置どおりの縦位置（baseY）と、可視の子孫の縦の範囲（descTop〜descBottom。スクロールに追従する時の移動範囲）
+    const span = (node) => {
+      node.baseY = node.y;
+      let top = Infinity;
+      let bottom = -Infinity;
+      for (const child of node.children) {
+        const s = span(child);
+        top = Math.min(top, s.top);
+        bottom = Math.max(bottom, s.bottom);
+      }
+      node.descTop = top;
+      node.descBottom = bottom;
+      return { top: Math.min(top, node.y), bottom: Math.max(bottom, node.y + node.h) };
+    };
+    span(rootNode);
 
     let width = 0;
     for (const node of order) width = Math.max(width, node.x + node.w);
