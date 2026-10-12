@@ -262,6 +262,32 @@ body.tab-dragging * {
   overflow: auto;
 }
 
+.filter-indicator {
+  position: absolute;
+  top: 8px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #1e64f0;
+  border-radius: 6px;
+  background: rgba(207, 224, 255, 0.92);
+  color: #1e64f0;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+  cursor: pointer;
+}
+
+.filter-indicator:hover {
+  background: #b9d1ff;
+}
+
+.filter-indicator[hidden] {
+  display: none;
+}
+
 .main-spacer {
   position: absolute;
   left: 0;
@@ -547,6 +573,11 @@ body.busy * {
   justify-content: space-between;
   padding: 12px 20px;
   border-top: 1px solid #dde2e8;
+}
+
+.modal-footer-group {
+  display: flex;
+  gap: 8px;
 }
 
 .settings-field {

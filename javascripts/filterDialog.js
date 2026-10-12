@@ -49,9 +49,19 @@ class FilterDialog {
     const ok = Util.el('button', 'settings-button primary', 'OK');
     ok.type = 'button';
     const submit = () => this.submit({ text: input.value, ignoreCase: FilterDialog.pressed(ignoreCase), regex: FilterDialog.pressed(regex) });
+    // フィルタ削除（表示タブがフィルタ中の時だけ押せる）
+    const remove = Util.el('button', 'settings-button', 'フィルタ削除');
+    remove.type = 'button';
+    remove.disabled = !app.activeFilter;
     cancel.addEventListener('click', () => this.close());
     ok.addEventListener('click', submit);
-    footer.append(cancel, ok);
+    remove.addEventListener('click', () => {
+      this.close();
+      app.clearFilter();
+    });
+    const right = Util.el('div', 'modal-footer-group');
+    right.append(remove, ok);
+    footer.append(cancel, right);
 
     dialog.append(title, body, footer);
     this.overlay.append(dialog);

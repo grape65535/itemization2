@@ -14,7 +14,15 @@ class MainArea {
     textarea.setAttribute('wrap', 'off');
     textarea.style.font = Config.font;
     this.scroller.append(this.spacer, textarea);
-    container.append(this.canvas, this.scroller);
+    // フィルタ中の印（漏斗のアイコン）。メインエリアの右上に重ね、スクロールしても動かない。クリックでフィルタを設定
+    this.filterIndicator = Util.el('button', 'filter-indicator');
+    this.filterIndicator.type = 'button';
+    this.filterIndicator.title = 'フィルタ中（クリックでフィルタを設定）';
+    this.filterIndicator.setAttribute('aria-label', this.filterIndicator.title);
+    this.filterIndicator.innerHTML = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">'
+      + '<path d="M3 4h18l-7 8.5V19l-4 2v-8.5z" fill="currentColor"/></svg>';
+    this.filterIndicator.addEventListener('click', () => app.filterDialog.open());
+    container.append(this.canvas, this.scroller, this.filterIndicator);
     this.ctx = this.canvas.getContext('2d');
 
     this.measurer = new TextMeasurer();
@@ -72,7 +80,15 @@ class MainArea {
       this.renderedTabId = tab.id;
     }
     this.positionEditor();
+    this.updateFilterIndicator();
     this.draw();
+  }
+
+  // フィルタ中だけ漏斗のアイコンを表示する（スクロールバーに重ならないよう、その内側に置く）
+  updateFilterIndicator() {
+    const el = this.filterIndicator;
+    el.hidden = !this.app.activeFilter;
+    el.style.right = this.container.clientWidth - this.scroller.clientWidth + 8 + 'px';
   }
 
   // 見えない TEXTAREA をカーソル位置に、ツールバーをアイテムの上（隠れる場合は下）に置く
@@ -262,14 +278,20 @@ class MainArea {
     }
   }
 
-  // アイテム上の右クリック：左クリックと同様に選択してから（未選択なら選択、SHIFT/CTRL なら選択に追加）右クリックメニューを開く
+  // アイテム上の右クリック：左クリックと同様に選択してから（未選択なら選択、SHIFT/CTRL なら選択に追加）右クリックメニューを開く。
+  // アイテム外の右クリック：選択を変えずに、アイテム外のメニュー（フィルタ）を開く
   onContextMenu(e) {
     if (e.defaultPrevented || !this.layout || this.toolbar.el.contains(e.target)) return;
+    const r = this.scroller.getBoundingClientRect();
+    if (e.clientX - r.left >= this.scroller.clientWidth || e.clientY - r.top >= this.scroller.clientHeight) return; // スクロールバー
     const hit = this.hitTest(this.toContent(e));
-    if (!hit || hit.type !== 'item') return;
     e.preventDefault();
     this.drag = null;
     this.toolbar.closePopup();
+    if (!hit || hit.type !== 'item') {
+      this.app.menuBar.openContext(e.clientX, e.clientY, true);
+      return;
+    }
     this.editor.end();
     const sel = this.app.selection;
     if (e.shiftKey || e.ctrlKey || e.metaKey) {
