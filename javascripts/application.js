@@ -23,6 +23,7 @@ class Application {
     this.menuBar = new MenuBar(this, menus);
     this.tabBar = new TabBar(this, tabBar);
     this.mainArea = new MainArea(this, main);
+    this.tabSettings = new TabSettingsDialog(this);
 
     // ファイルを開く（OS 標準のダイアログ）・画面へのドロップ
     this.fileInput = Util.el('input', 'file-input');
@@ -337,6 +338,36 @@ class Application {
     }, { itemId: targets[0] });
   }
 
+  // ---- ステータス ----
+
+  // 「ステータスを設定」のサブメニュー（タブの設定に登録されたステータス）
+  statusMenuItems() {
+    return this.activeTab.options.statuses.map((s) => ({
+      label: s.name,
+      badge: TabSettingsDialog.badge(s.name, s.color),
+      action: () => this.setStatus(s.name),
+    }));
+  }
+
+  selectedHasStatus() {
+    return this.selectedIds().some((id) => !!this.index.get(id).item.status);
+  }
+
+  // 選択中のアイテムにステータスを設定する（name が null なら削除）。1 回の Undo で戻る
+  setStatus(name) {
+    this.editor.end();
+    const ids = this.selectedIds();
+    if (ids.length === 0) return;
+    this.commit((doc) => {
+      for (const id of ids) Model.assignStatus(Model.locate(doc, id).item, name);
+      return { itemId: ids[0] };
+    }, { itemId: ids[0] });
+  }
+
+  clearStatus() {
+    this.setStatus(null);
+  }
+
   // ---- 全て選択・コピー・切り取り・貼り付け ----
 
   // アクティブタブ内の選択中アイテム（文書順）
@@ -369,6 +400,7 @@ class Application {
   }
 
   onClipboardEvent(e, type) {
+    if (this.tabSettings.isOpen) return;
     if (Util.isTextInput(e.target) || this.editor.isEditing || this.tabBar.rename) return;
     if (type === 'paste') {
       e.preventDefault();
@@ -473,8 +505,14 @@ class Application {
   // ---- キー操作（文字入力中以外） ----
 
   onKeyDown(e) {
+    // モーダルダイアログ表示中はアプリのショートカットを無効にする（ESC は閉じる）
+    if (this.tabSettings.isOpen) {
+      if (e.key === 'Escape') this.tabSettings.close();
+      return;
+    }
     if (this.mainArea.handleKeyDown(e)) return;
     if (e.key === 'Escape' && this.menuBar.closeAll()) return;
+    if (e.key === 'Escape' && this.mainArea.toolbar.closePopup()) return;
     // ファイルを開く・保存は文字入力中も有効（ブラウザ標準の動作を抑止）
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && !e.isComposing) {
       const k = e.key.toLowerCase();
@@ -492,9 +530,10 @@ class Application {
       e.preventDefault();
       if (e.shiftKey) this.redo();
       else this.undo();
-    } else if (ctrl && !e.altKey && key === 'e') {
+    } else if (!ctrl && !e.altKey && (e.key === ';' || e.key === '-')) {
+      // ; でツリーを全て開く、- でツリーを全て閉じる
       e.preventDefault();
-      this.setTreeCollapsed(e.shiftKey);
+      this.setTreeCollapsed(e.key === '-');
     } else if (ctrl && !e.altKey && !e.shiftKey && key === 'a') {
       e.preventDefault();
       this.selectAll();

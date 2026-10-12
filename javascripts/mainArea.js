@@ -8,23 +8,27 @@ class MainArea {
     this.canvas = Util.el('canvas', 'main-canvas');
     this.scroller = Util.el('div', 'main-scroller');
     this.spacer = Util.el('div', 'main-spacer');
+    // 文字入力を受ける見えない TEXTAREA（文字・カーソルは CANVAS に描く）。IME の候補窓のためカーソル位置に置く
     const textarea = Util.el('textarea', 'item-editor');
     textarea.spellcheck = false;
-    textarea.setAttribute('wrap', 'soft');
+    textarea.setAttribute('wrap', 'off');
     textarea.style.font = Config.font;
-    textarea.style.lineHeight = Config.lineHeight + 'px';
     this.scroller.append(this.spacer, textarea);
     container.append(this.canvas, this.scroller);
     this.ctx = this.canvas.getContext('2d');
 
-    this.measurer = new TextMeasurer(Config.font);
+    this.measurer = new TextMeasurer();
     this.editor = new ItemEditor(this, textarea);
+    this.toolbar = new EditToolbar(this, this.scroller);
     this.layout = null;
     this.drag = null;
     this.renderedTabId = null;
     this.scrollPositions = new Map();
 
-    this.scroller.addEventListener('scroll', () => this.draw());
+    this.scroller.addEventListener('scroll', () => {
+      this.positionEditor();
+      this.draw();
+    });
     this.scroller.addEventListener('mousedown', (e) => this.onMouseDown(e));
     this.scroller.addEventListener('mousemove', (e) => this.updateCursor(e));
     window.addEventListener('mousemove', (e) => this.onMouseMove(e));
@@ -42,6 +46,7 @@ class MainArea {
         this.suppressContextMenu = false;
       }
     });
+    this.scroller.addEventListener('contextmenu', (e) => this.onContextMenu(e));
     window.addEventListener('resize', () => this.render());
   }
 
@@ -55,9 +60,8 @@ class MainArea {
         this.scrollPositions.set(this.renderedTabId, { x: this.scroller.scrollLeft, y: this.scroller.scrollTop });
       }
     }
-    const editingId = this.editor.editingId;
-    const override = editingId !== null ? { id: editingId, text: this.editor.text } : null;
-    this.layout = TreeLayout.compute(tab.root, this.measurer, override);
+    const override = this.editor.isEditing ? this.editor.override : null;
+    this.layout = TreeLayout.compute(tab.root, this.measurer, override, tab.options);
     this.spacer.style.width = this.layout.width + 'px';
     this.spacer.style.height = this.layout.height + 'px';
     if (this.renderedTabId !== tab.id) {
@@ -70,18 +74,21 @@ class MainArea {
     this.draw();
   }
 
+  // 見えない TEXTAREA をカーソル位置に、ツールバーをアイテムの上（隠れる場合は下）に置く
   positionEditor() {
     const ta = this.editor.ta;
-    const node = this.editor.editingId !== null ? this.layout.nodes.get(this.editor.editingId) : null;
+    const node = this.editor.node;
     if (!node) {
       ta.style.display = 'none';
+      this.toolbar.hide();
       return;
     }
+    const caret = this.editor.caretRect(this.editor.anchorFocus()[1]);
     ta.style.display = 'block';
-    ta.style.left = node.x + Config.paddingX + 'px';
-    ta.style.top = node.y + Config.paddingY + 'px';
-    ta.style.width = node.contentWidth + 2 + 'px';
-    ta.style.height = node.lines.length * Config.lineHeight + 'px';
+    ta.style.left = caret.x + 'px';
+    ta.style.top = caret.y + 'px';
+    ta.style.height = caret.h + 'px';
+    this.toolbar.show(node);
   }
 
   draw() {
@@ -101,11 +108,12 @@ class MainArea {
       scrollY: this.scroller.scrollTop,
       viewWidth: w,
       viewHeight: h,
-      editingId: this.editor.editingId,
+      editing: this.editor.drawState(),
       selection: this.app.selection,
       candidates: this.drag && this.drag.type === 'marquee' ? this.drag.candidates : null,
       drag: this.drag,
     });
+    this.toolbar.syncSelection();
   }
 
   // アイテムが描画範囲外ならスクロールして範囲内に収める
@@ -163,24 +171,41 @@ class MainArea {
 
   caretAt(id, p) {
     const node = this.layout.nodes.get(id);
-    const index = Util.clamp(Math.floor((p.y - node.y - Config.paddingY) / Config.lineHeight), 0, node.lines.length - 1);
-    return this.measurer.offsetAt(node.text, node.lines[index], p.x - node.x - Config.paddingX);
+    const line = node.lines[TreeLayout.lineIndexAtY(node, p.y - node.y - Config.paddingY)];
+    return this.measurer.offsetAt(node.text, node.styles, line, p.x - node.x - Config.paddingX - line.x);
+  }
+
+  // 文字入力中でない時、ハイパーリンク（URL）の文字の上なら、その URL を返す
+  linkAt(hit, p) {
+    if (this.editor.isEditing || !hit || hit.type !== 'item' || hit.part !== 'inner') return null;
+    const node = this.layout.nodes.get(hit.id);
+    const y = p.y - node.y - Config.paddingY;
+    const index = TreeLayout.lineIndexAtY(node, y);
+    const line = node.lines[index];
+    if (y < line.top || y >= line.top + line.height) return null;
+    const i = this.measurer.charIndexAt(node.text, node.styles, line, p.x - node.x - Config.paddingX - line.x);
+    if (i < 0) return null;
+    const range = RichText.urlRanges(node.text).find((r) => r.start <= i && i < r.end);
+    return range ? node.text.slice(range.start, range.end) : null;
   }
 
   updateCursor(e) {
     if (this.drag) return;
-    const hit = this.layout && this.hitTest(this.toContent(e));
-    this.scroller.style.cursor = !hit ? 'default' : hit.type === 'toggle' ? 'pointer' : hit.part === 'inner' ? 'text' : 'default';
+    const p = this.layout && this.toContent(e);
+    const hit = this.layout && this.hitTest(p);
+    this.scroller.style.cursor = !hit ? 'default' : hit.type === 'toggle' || this.linkAt(hit, p) ? 'pointer'
+      : hit.part === 'inner' ? 'text' : 'default';
   }
 
   // ---- マウス操作 ----
 
   onMouseDown(e) {
-    if (e.button !== 0 || e.target === this.editor.ta) return;
+    if (e.button !== 0 || e.target === this.editor.ta || this.toolbar.el.contains(e.target)) return;
     const r = this.scroller.getBoundingClientRect();
     if (e.clientX - r.left >= this.scroller.clientWidth || e.clientY - r.top >= this.scroller.clientHeight) return; // スクロールバー
     e.preventDefault();
     this.app.menuBar.closeAll();
+    this.toolbar.closePopup();
     const p = this.toContent(e);
     const hit = this.hitTest(p);
     const modifier = e.shiftKey || e.ctrlKey || e.metaKey;
@@ -189,12 +214,24 @@ class MainArea {
       this.app.toggleCollapse(hit.id);
       return;
     }
-    if (hit && !modifier && hit.part === 'inner' && hit.id === this.editor.editingId) {
+    // 文字入力中のアイテム内：クリックでカーソル移動、ドラッグ・SHIFT+クリックで範囲選択、ダブル／トリプルクリックで単語／段落を選択
+    if (hit && hit.part === 'inner' && hit.id === this.editor.editingId) {
+      const editor = this.editor;
       const offset = this.caretAt(hit.id, p);
-      this.editor.ta.focus({ preventScroll: true });
-      this.editor.ta.setSelectionRange(offset, offset);
+      editor.ta.focus({ preventScroll: true });
+      if (e.detail === 2) {
+        editor.selectWord(offset);
+      } else if (e.detail >= 3) {
+        editor.selectParagraph(offset);
+      } else {
+        const anchor = e.shiftKey ? editor.anchorFocus()[0] : offset;
+        editor.setSelection(anchor, offset);
+        this.drag = { type: 'text', id: hit.id, anchor };
+      }
       return;
     }
+    // 文字入力中でなければ、ハイパーリンクのクリック（ドラッグしなかった時）で URL を開く
+    const link = modifier ? null : this.linkAt(hit, p);
     this.editor.end();
 
     if (hit) {
@@ -205,7 +242,7 @@ class MainArea {
         this.draw();
         return;
       }
-      this.drag = { type: 'pending', id: hit.id, part: hit.part, start: p, client: { x: e.clientX, y: e.clientY } };
+      this.drag = { type: 'pending', id: hit.id, part: hit.part, link, start: p, client: { x: e.clientX, y: e.clientY } };
     } else if (modifier) {
       this.drag = { type: 'marquee', start: p, current: p, rect: null, candidates: new Set() };
     } else {
@@ -214,6 +251,28 @@ class MainArea {
         scroll: { x: this.scroller.scrollLeft, y: this.scroller.scrollTop }, moved: false,
       };
     }
+  }
+
+  // アイテム上の右クリック：左クリックと同様に選択してから（未選択なら選択、SHIFT/CTRL なら選択に追加）右クリックメニューを開く
+  onContextMenu(e) {
+    if (e.defaultPrevented || !this.layout || this.toolbar.el.contains(e.target)) return;
+    const hit = this.hitTest(this.toContent(e));
+    if (!hit || hit.type !== 'item') return;
+    e.preventDefault();
+    this.drag = null;
+    this.toolbar.closePopup();
+    this.editor.end();
+    const sel = this.app.selection;
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      // 選択の解除はせず、末尾（最後に選択したアイテム）に追加する
+      sel.delete(hit.id);
+      sel.add(hit.id);
+    } else if (!sel.has(hit.id)) {
+      sel.clear();
+      sel.add(hit.id);
+    }
+    this.draw();
+    this.app.menuBar.openContext(e.clientX, e.clientY);
   }
 
   onMouseMove(e) {
@@ -246,6 +305,11 @@ class MainArea {
         this.updateMarquee();
         this.draw();
         break;
+      case 'text':
+        if (this.editor.editingId !== d.id) break;
+        this.autoScroll(e);
+        this.editor.setSelection(d.anchor, this.caretAt(d.id, this.toContent(e)));
+        break;
     }
   }
 
@@ -259,7 +323,10 @@ class MainArea {
       case 'pending':
         sel.clear();
         sel.add(d.id);
-        if (d.part === 'inner') this.editor.start(d.id, this.caretAt(d.id, d.start));
+        if (d.link) {
+          window.open(d.link, '_blank', 'noopener');
+          this.draw();
+        } else if (d.part === 'inner') this.editor.start(d.id, this.caretAt(d.id, d.start));
         else this.draw();
         break;
       case 'item':
@@ -337,7 +404,8 @@ class MainArea {
     for (const n of this.layout.order) {
       const ow = Math.min(x2, n.x + n.w) - Math.max(x1, n.x);
       const oh = Math.min(y2, n.y + n.h) - Math.max(y1, n.y);
-      if (ow > 0 && oh > 0 && ow * oh * 2 >= n.w * n.h) d.candidates.add(n.id);
+      // 面積の 25% 以上が範囲内のアイテムを候補にする
+      if (ow > 0 && oh > 0 && ow * oh * 4 >= n.w * n.h) d.candidates.add(n.id);
     }
   }
 

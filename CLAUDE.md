@@ -32,24 +32,29 @@ stylesheets/app.css        全スタイル
 javascripts/               （index.html での読み込み順）
   config.js                定数（アプリ名・バージョン・寸法・フォント・localStorage キー）
   util.js                  ID 生成・DOM 生成などの小物
+  richText.js              文字の装飾（スタイルの正規化・文字ごとの配列と保存形式の変換・差分）
   model.js                 文書 JSON のツリー操作（生成・検証・索引・削除＋子の繰り上げ）
   history.js               全タブ共通の Undo/Redo 履歴（変更前後の JSON を保持）
   storage.js               localStorage への保存・復元
   fileExport.js            ファイルを開く（JSON/SVG）・保存（JSON/SVG/PDF）。PDF 用ライブラリは遅延読み込み
   itemClipboard.js         コピー/貼り付け用の変換（選択→クリップ形式、箇条書き文字列の生成と解析、JSON）
-  textMeasurer.js          文字幅計測と折り返し計算（CANVAS・寸法・カーソル行判定で共通使用）
+  textMeasurer.js          装飾込みの文字幅計測と折り返し計算（行の高さ・描画区間。CANVAS・寸法・カーソル・SVG/PDF で共通使用）
   treeLayout.js            ツリー配置計算、[+][-] アイコン位置
   renderer.js              メインエリアの CANVAS 描画
-  itemEditor.js            TEXTAREA による文字入力とキー操作
+  itemEditor.js            文字入力（見えない TEXTAREA で受け CANVAS に描く）・キー操作・入力中の Undo・装飾の適用
+  editToolbar.js           装飾ツールバー（ボタン・ポップアップ・ツールチップ）と、選択中アイテムへの装飾の適用（SelectionDecorator）
   mainArea.js              メインエリア（スクロール・ヒットテスト・選択・ドラッグ・範囲選択）
   tabBar.js                タブバー（切替・追加・削除・並べ替え）
   menuBar.js               ヘッダのメニュー
+  tabSettingsDialog.js     オプション → タブの設定のモーダルダイアログ（ステータスのバッジ表示 badge() も持つ）
   application.js           全体の状態（文書・アクティブタブ・選択・履歴）と変更操作 commit()
   vendor/                  同梱ライブラリ・フォント（PDF 保存時のみ読み込み。内容とライセンスは vendor/README.md）
 ```
 
 ### 実装メモ
 - 文書の変更は必ず `Application.commit(fn, hint)` を通す（履歴登録・保存・再描画を一括で行う）。
+- 文字入力中の内容（文字列・文字ごとのスタイル・背景色・寄せ方）は `ItemEditor` が保持し、`commitText()` でまとめて文書へ反映する。
+  スタイルは `RichText.intern()` で共有したオブジェクトを参照で比較する。文字列を変えたらスタイル配列の長さも合わせること。
 - UI 状態（選択・文字入力中アイテム）は ID で保持する。Undo で文書オブジェクトが作り直されるため。
 - バージョンを上げる時は `config.js` の `version` と `index.html` の `?v=` をすべて更新する。
 - `file://` で動かすため fetch/XHR でローカルファイルを読まない。追加のリソースは `<script>` で読み込む（例: `vendor/ipafont/ipag-font.js`）。

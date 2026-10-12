@@ -2,31 +2,57 @@
 
 // アイテムツリーの配置計算。
 // ルートを左上に置き、左→右（階層）、上→下（兄弟）へ広げる。
-// 同じ階層のアイテムは左端を揃え、親は可視の子群（最初の子と最後の子の縦中央の中間）に縦中央を合わせる。
+// 同じ階層のアイテムは左端を揃え、親は可視の子群（最初の子と最後の子の縦中央の中間）に縦中央を合わせる（タブの設定で上寄せも可）。
 const TreeLayout = {
-  // override: 文字入力中アイテムの { id, text }（未確定の文字列で寸法を計算するため）
-  compute(root, measurer, override) {
+  // override: 文字入力中アイテムの { id, text, styles, fill, align }（未確定の内容で寸法を計算するため）
+  // options: タブの設定（最大表示幅 maxWidth、親の縦位置 parentAlign）
+  compute(root, measurer, override, options) {
     const C = Config;
+    const maxWidth = (options && options.maxWidth) || C.maxContentWidth;
+    const parentTop = !!options && options.parentAlign === 'top';
     const nodes = new Map();
     const order = []; // 可視アイテムの文書順
     const maxWidthByDepth = [];
 
     const measure = (item, depth, parentId) => {
-      const text = override && override.id === item.id ? override.text : item.text;
-      const lines = measurer.wrap(text, C.maxContentWidth);
-      let contentWidth = C.minContentWidth;
+      const src = override && override.id === item.id ? override : item;
+      const text = src.text;
+      // 表示用のスタイル（URL はハイパーリンクの見た目）。幅は装飾のスタイルと同じ
+      const styles = RichText.displayStyles(text, src === item ? RichText.toArray(text, item.spans) : RichText.fit(src.styles, text.length));
+      const lines = measurer.wrap(text, maxWidth, styles);
+      // ステータスのバッジ（文字領域の左上。文字列はその下から始める）
+      let status = null;
+      if (item.status) {
+        status = Model.statusLook(options, item.status);
+        status.w = Math.ceil(measurer.textWidth(item.status, C.statusFont)) + C.statusPaddingX * 2;
+        status.h = C.statusHeight;
+      }
+      let contentWidth = Math.max(C.minContentWidth, status ? status.w : 0);
       for (const line of lines) contentWidth = Math.max(contentWidth, line.width);
       contentWidth = Math.ceil(contentWidth);
+      // 行の縦位置と、寄せ方による横位置（文字領域の左端から）
+      const align = src.align === 'center' || src.align === 'right' ? src.align : 'left';
+      const factor = align === 'center' ? 0.5 : align === 'right' ? 1 : 0;
+      let contentHeight = status ? status.h + C.statusGap : 0;
+      for (const line of lines) {
+        line.top = contentHeight;
+        line.x = (contentWidth - line.width) * factor;
+        contentHeight += line.height;
+      }
       const node = {
         id: item.id,
         item,
         text,
+        styles,
         lines,
+        fill: src.fill || null,
+        align,
+        status,
         depth,
         parentId,
         contentWidth,
         w: contentWidth + C.paddingX * 2,
-        h: lines.length * C.lineHeight + C.paddingY * 2,
+        h: contentHeight + C.paddingY * 2,
         x: 0,
         y: 0,
         hasChildren: item.children.length > 0,
@@ -68,7 +94,8 @@ const TreeLayout = {
       const last = node.children[node.children.length - 1];
       const firstCenter = first.subtreeTop + first.relTop + first.h / 2;
       const lastCenter = last.subtreeTop + last.relTop + last.h / 2;
-      let top = Math.round((firstCenter + lastCenter) / 2 - node.h / 2);
+      // 中央寄せ: 最初と最後の子の縦中央の中間に縦中央を合わせる。上寄せ: 最初の子と上端を揃える
+      let top = parentTop ? first.subtreeTop + first.relTop : Math.round((firstCenter + lastCenter) / 2 - node.h / 2);
       let shift = 0;
       if (top < 0) {
         shift = -top;
@@ -94,6 +121,14 @@ const TreeLayout = {
       width: width + C.toggleSize + C.margin,
       height: C.margin * 2 + rootNode.subtreeHeight,
     };
+  },
+
+  // 表示行の番号（文字領域の上端からの y 座標で。範囲外は最初・最後の行）
+  lineIndexAtY(node, y) {
+    for (let i = node.lines.length - 1; i > 0; i--) {
+      if (y >= node.lines[i].top) return i;
+    }
+    return 0;
   },
 
   // [+][-] アイコンを表示するか（子があれば文字入力・選択状態に関係なく常に表示）

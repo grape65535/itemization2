@@ -6,17 +6,21 @@ const Renderer = {
     background: '#f7f8fa',
     connector: '#8a929c',
     itemFill: '#ffffff',
-    candidateFill: '#cfe0ff', // 範囲選択の候補（選択確定後は通常の背景に戻る）
+    candidateFill: '#cfe0ff', // 選択中・範囲選択の候補のアイテムの背景
     marqueeFill: 'rgba(110, 118, 130, 0.12)', // 候補の青と区別するため無彩色
     marqueeBorder: '#6b7480',
     itemBorder: '#000000',
     text: '#000000',
     selected: '#1e64f0',
+    textSelection: 'rgba(30, 100, 240, 0.28)', // 文字入力中の選択範囲
+    textSelectionBlur: 'rgba(110, 118, 130, 0.25)', // フォーカスが無い時の選択範囲
+    caret: '#000000',
     toggleFill: '#ffffff',
     toggleBorder: '#6b7480',
   },
 
-  // state: { scrollX, scrollY, viewWidth, viewHeight, editingId, selection, candidates, drag }
+  // state: { scrollX, scrollY, viewWidth, viewHeight, editing, selection, candidates, drag }
+  //   editing: 文字入力中のアイテムの { id, focused, caret: {x,y,h}|null, selection: [{x,y,w,h}], composition: [{x,y,w}] }
   draw(ctx, layout, state) {
     const C = Config;
     const col = Renderer.colors;
@@ -56,8 +60,6 @@ const Renderer = {
     if (drag && drag.type === 'marquee') Renderer.drawMarquee(ctx, drag, 'fill');
 
     // アイテム
-    ctx.font = C.font;
-    ctx.textBaseline = 'middle';
     for (const node of layout.order) {
       if (!visible(node.x - 2, node.y - 2, node.w + C.toggleSize + 8, node.h + 4)) continue;
       Renderer.drawItem(ctx, node, state);
@@ -91,20 +93,79 @@ const Renderer = {
     const candidate = !selected && state.candidates && state.candidates.has(node.id);
 
     Renderer.roundRectPath(ctx, node.x + 0.5, node.y + 0.5, node.w - 1, node.h - 1, C.cornerRadius);
-    ctx.fillStyle = candidate ? col.candidateFill : col.itemFill;
+    ctx.fillStyle = selected || candidate ? col.candidateFill : node.fill || col.itemFill;
     ctx.fill();
     ctx.lineWidth = selected ? 2 : 1;
     ctx.strokeStyle = selected || candidate ? col.selected : col.itemBorder;
     ctx.stroke();
 
-    // 文字入力中は TEXTAREA が文字を表示する
-    if (node.id === state.editingId) return;
-    ctx.fillStyle = col.text;
-    const tx = node.x + C.paddingX;
-    for (let i = 0; i < node.lines.length; i++) {
-      const line = node.lines[i];
-      if (line.end <= line.start) continue;
-      ctx.fillText(node.text.slice(line.start, line.end), tx, node.y + C.paddingY + i * C.lineHeight + C.lineHeight / 2);
+    const editing = state.editing && state.editing.id === node.id ? state.editing : null;
+    if (node.status) Renderer.drawStatus(ctx, node);
+    // 文字背景 → 選択範囲 → 文字 → 下線・取消し線 → カーソルの順に重ねる
+    Renderer.eachSegment(node, (seg, x, baseline) => {
+      if (!seg.style || !seg.style.bg) return;
+      const d = RichText.decoration(seg.style, baseline);
+      ctx.fillStyle = seg.style.bg;
+      ctx.fillRect(x, d.bgTop, seg.width, d.bgHeight);
+    });
+    if (editing) {
+      ctx.fillStyle = editing.focused ? col.textSelection : col.textSelectionBlur;
+      for (const r of editing.selection) ctx.fillRect(r.x, r.y, r.w, r.h);
+    }
+    ctx.save();
+    ctx.textBaseline = 'alphabetic';
+    Renderer.eachSegment(node, (seg, x, baseline) => {
+      ctx.font = RichText.font(seg.style);
+      ctx.fillStyle = (seg.style && seg.style.color) || col.text;
+      ctx.fillText(node.text.slice(seg.start, seg.end), x, baseline);
+      if (seg.style && (seg.style.underline || seg.style.strike)) {
+        const d = RichText.decoration(seg.style, baseline);
+        if (seg.style.underline) ctx.fillRect(x, Math.round(d.underlineY), seg.width, d.thickness);
+        if (seg.style.strike) ctx.fillRect(x, Math.round(d.strikeY), seg.width, d.thickness);
+      }
+    });
+    ctx.restore();
+    if (editing) {
+      ctx.fillStyle = col.text;
+      for (const r of editing.composition) ctx.fillRect(r.x, r.y, r.w, 1);
+      if (editing.caret) {
+        ctx.fillStyle = col.caret;
+        ctx.fillRect(Math.round(editing.caret.x), editing.caret.y, 1, editing.caret.h);
+      }
+    }
+  },
+
+  // ステータスのバッジ（文字領域の左上。削除されたステータスは白背景・灰色の文字・黒の点線枠）
+  drawStatus(ctx, node) {
+    const C = Config;
+    const s = node.status;
+    const x = node.x + C.paddingX;
+    const y = node.y + C.paddingY;
+    ctx.save();
+    Renderer.roundRectPath(ctx, x + 0.5, y + 0.5, s.w - 1, s.h - 1, s.h / 2 - 0.5);
+    ctx.fillStyle = s.bg;
+    ctx.fill();
+    if (s.orphan) {
+      ctx.setLineDash([2, 2]);
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = C.statusOrphan.border;
+      ctx.stroke();
+    }
+    ctx.font = C.statusFont;
+    ctx.fillStyle = s.fg;
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'center';
+    ctx.fillText(s.name, x + s.w / 2, y + s.h / 2 + 0.5);
+    ctx.restore();
+  },
+
+  // 表示行の区間ごとに fn(segment, 左端の x, ベースラインの y) を呼ぶ（座標はコンテンツ座標）
+  eachSegment(node, fn) {
+    const left = node.x + Config.paddingX;
+    const top = node.y + Config.paddingY;
+    for (const line of node.lines) {
+      const baseline = top + line.top + line.baseline;
+      for (const seg of line.segments) fn(seg, left + line.x + seg.x, baseline);
     }
   },
 
@@ -167,7 +228,7 @@ const Renderer = {
       const node = layout.nodes.get(id);
       if (!node) continue;
       const ghost = Object.assign({}, node, { x: node.x + dx, y: node.y + dy });
-      Renderer.drawItem(ctx, ghost, { selection: new Set([id]), editingId: null });
+      Renderer.drawItem(ctx, ghost, { selection: new Set([id]), editing: null });
     }
     ctx.restore();
   },
