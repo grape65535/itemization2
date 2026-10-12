@@ -33,6 +33,9 @@ class MenuBar {
           { separator: true },
           { label: 'ステータスを設定', submenu: () => app.statusMenuItems(), enabled: () => app.selectedIds().length > 0 },
           { label: 'ステータスを削除', action: () => app.clearStatus(), enabled: () => app.selectedHasStatus() },
+          { separator: true },
+          { label: 'フィルタを設定', action: () => app.filterDialog.open() },
+          { label: 'フィルタを削除', action: () => app.clearFilter(), enabled: () => app.filterCondition !== null },
         ],
       },
       {

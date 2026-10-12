@@ -24,6 +24,8 @@ class Application {
     this.tabBar = new TabBar(this, tabBar);
     this.mainArea = new MainArea(this, main);
     this.tabSettings = new TabSettingsDialog(this);
+    this.filterDialog = new FilterDialog(this);
+    this.filterCondition = null; // フィルタの条件 { text, ignoreCase, regex }（検索・フィルタ処理は未実装）
 
     // ファイルを開く（OS 標準のダイアログ）・画面へのドロップ
     this.fileInput = Util.el('input', 'file-input');
@@ -399,8 +401,18 @@ class Application {
     return { clips, text: ItemClipboard.toText(clips), json: ItemClipboard.toJson(clips) };
   }
 
+  // モーダルダイアログを表示中か
+  get modalOpen() {
+    return this.tabSettings.isOpen || this.filterDialog.isOpen;
+  }
+
+  // フィルタを削除する（検索・フィルタ処理は未実装のため、条件を消すだけ）
+  clearFilter() {
+    this.filterCondition = null;
+  }
+
   onClipboardEvent(e, type) {
-    if (this.tabSettings.isOpen) return;
+    if (this.modalOpen) return;
     if (Util.isTextInput(e.target) || this.editor.isEditing || this.tabBar.rename) return;
     if (type === 'paste') {
       e.preventDefault();
@@ -506,8 +518,11 @@ class Application {
 
   onKeyDown(e) {
     // モーダルダイアログ表示中はアプリのショートカットを無効にする（ESC は閉じる）
-    if (this.tabSettings.isOpen) {
-      if (e.key === 'Escape') this.tabSettings.close();
+    if (this.modalOpen) {
+      if (e.key === 'Escape') {
+        this.tabSettings.close();
+        this.filterDialog.close();
+      }
       return;
     }
     if (this.mainArea.handleKeyDown(e)) return;

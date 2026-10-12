@@ -493,7 +493,7 @@ body.busy * {
   cursor: progress !important;
 }
 
-/* ---- モーダルダイアログ（タブの設定） ---- */
+/* ---- モーダルダイアログ（タブの設定・フィルタを設定） ---- */
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -706,4 +706,45 @@ body.busy * {
 .settings-error {
   min-height: 1.2em;
   color: #d9534f;
+}
+
+/* ---- フィルタを設定 ---- */
+.modal-dialog.filter-dialog {
+  width: 480px;
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.filter-input {
+  flex: 1;
+  min-width: 0;
+  margin-right: 4px;
+}
+
+/* オン・オフを切り替えるアイコンボタン */
+.filter-toggle {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: #2f3a4a;
+  font: bold 13px/1 Consolas, Menlo, monospace;
+  cursor: pointer;
+}
+
+.filter-toggle:hover {
+  background: #e6efff;
+}
+
+.filter-toggle[aria-pressed='true'] {
+  border-color: #1e64f0;
+  background: #cfe0ff;
+  color: #1e64f0;
 }

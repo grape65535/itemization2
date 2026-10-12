@@ -47,6 +47,7 @@ javascripts/               （index.html での読み込み順）
   tabBar.js                タブバー（切替・追加・削除・並べ替え）
   menuBar.js               ヘッダのメニュー
   tabSettingsDialog.js     オプション → タブの設定のモーダルダイアログ（ステータスのバッジ表示 badge() も持つ）
+  filterDialog.js          編集 → フィルタを設定のモーダルダイアログ（検索文字列・大文字小文字を区別しない・正規表現）
   application.js           全体の状態（文書・アクティブタブ・選択・履歴）と変更操作 commit()
   vendor/                  同梱ライブラリ・フォント（PDF 保存時のみ読み込み。内容とライセンスは vendor/README.md）
 ```
