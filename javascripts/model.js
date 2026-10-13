@@ -278,6 +278,14 @@ const Model = {
     return true;
   },
 
+  // アイテムを子孫ごと削除する（ルートは削除しない。祖先と一緒に削除済みなら何もしない）
+  removeSubtree(doc, id) {
+    const loc = Model.locate(doc, id);
+    if (!loc || !loc.parent) return false;
+    loc.parent.children.splice(loc.index, 1);
+    return true;
+  },
+
   isDescendant(index, id, ancestorId) {
     let entry = index.get(id);
     while (entry && entry.parent) {

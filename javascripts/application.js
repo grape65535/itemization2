@@ -272,8 +272,9 @@ class Application {
     this.mainArea.scrollIntoView(newId);
   }
 
-  // 選択中のアイテムを削除し、子をその位置に繰り上げる（ルートは削除しない）
-  deleteSelected() {
+  // 選択中のアイテムを削除し、子をその位置に繰り上げる（ルートは削除しない）。
+  // withDescendants: 子を繰り上げず、子孫（折り畳み・非表示・フィルタで隠れたものも含む）ごと削除する
+  deleteSelected(withDescendants = false) {
     const ids = [...this.selection]
       .filter((id) => {
         const entry = this.index.get(id);
@@ -283,7 +284,10 @@ class Application {
     if (ids.length === 0) return;
     const parentId = this.index.get(ids[0]).parent.id;
     this.commit((doc) => {
-      for (const id of ids) Model.removePromote(doc, id);
+      for (const id of ids) {
+        if (withDescendants) Model.removeSubtree(doc, id);
+        else Model.removePromote(doc, id);
+      }
       return { itemId: parentId };
     }, { itemId: ids[0] });
     this.selection.clear();

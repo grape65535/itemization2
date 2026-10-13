@@ -56,7 +56,14 @@ class MenuBar {
               ];
             },
           },
-          { label: 'アイテムを削除', action: () => app.deleteSelected(), enabled: () => app.selectedIds().length > 0 },
+          {
+            label: 'アイテムを削除',
+            enabled: () => app.selectedIds().length > 0,
+            submenu: () => [
+              { label: '選択中のアイテムを削除', action: () => app.deleteSelected() },
+              { label: '選択中のアイテムの子も削除', action: () => app.deleteSelected(true) },
+            ],
+          },
           { separator: true },
           { label: 'ステータスを設定', submenu: () => app.statusMenuItems(), enabled: () => app.selectedIds().length > 0 },
           { label: 'ステータスを削除', action: () => app.clearStatus(), enabled: () => app.selectedHasStatus() },
