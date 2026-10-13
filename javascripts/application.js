@@ -7,8 +7,6 @@ class Application {
     this.doc = loaded || Model.createDocument();
     if (loaded) Storage.saveDocument(JSON.stringify(this.doc)); // 読み込み時に補った値（旧形式のアイテムの日時など）を保存する
     this.filters = new Map(); // タブ ID -> フィルタ中の表示 { hidden: [+] で隠すアイテムの ID の Set }（文書の tab.filter.hidden から作る）
-    // フィルタ後の開閉状態が記録されていない（旧形式の）フィルタ中のタブは、記録した条件でフィルタをかけた状態から始める
-    if (this.refilterTabs(this.doc.tabs, true)) Storage.saveDocument(JSON.stringify(this.doc));
     this.reindex();
     this.syncFilters();
     const ui = Storage.loadUi();
@@ -321,7 +319,6 @@ class Application {
       }
       this.finishInput();
       this.commit((doc) => {
-        this.refilterTabs(tabs, true); // フィルタ後の開閉状態が無いフィルタ中のタブは、フィルタをかけた状態で開く
         doc.tabs.push(...tabs);
         this.setActiveTab(tabs[tabs.length - 1].id);
         return { tabId: this.activeTabId };
@@ -569,7 +566,7 @@ class Application {
     const changed = this.commit((doc) => {
       const tab = doc.tabs.find((t) => t.id === tabId);
       tab.filter = Object.assign({}, condition, { active: true });
-      this.refilterTabs([tab]);
+      Model.applyFilter(tab);
       return { tabId };
     }, { tabId });
     if (!changed) this.refresh();
@@ -579,31 +576,13 @@ class Application {
     this.mainArea.draw();
   }
 
-  // フィルタ中のタブにフィルタをかけ直す：ヒットしないアイテムを [+] で隠し（tab.filter.hidden に記録）、折り畳み状態も適用時の状態にする。
-  // 適用時はフィルタ後の開閉状態をリセットする。onlyMissing: フィルタ後の開閉状態が記録されていないタブだけ（起動時・ファイルを開いた時）。
-  // かけ直したタブがあれば true
-  refilterTabs(tabs, onlyMissing = false) {
-    let changed = false;
-    for (const tab of tabs) {
-      if (!tab.filter || !tab.filter.active) continue;
-      if (onlyMissing && Array.isArray(tab.filter.hidden)) continue;
-      const plan = Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options));
-      Model.applyFilterCollapse(tab.root, plan);
-      tab.filter.hidden = [...plan.hidden];
-      changed = true;
-    }
-    return changed;
-  }
-
   // 文書のフィルタ状態（tab.filter の active・hidden。Undo/Redo などで変わる）に、[+] で隠すアイテムを合わせる
   syncFilters() {
     const tabIds = new Set();
     for (const tab of this.doc.tabs) {
       if (!tab.filter || !tab.filter.active) continue;
       tabIds.add(tab.id);
-      const hidden = Array.isArray(tab.filter.hidden) ? tab.filter.hidden
-        : Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options)).hidden;
-      this.filters.set(tab.id, { hidden: new Set(hidden) });
+      this.filters.set(tab.id, { hidden: new Set(tab.filter.hidden || []) });
     }
     for (const id of [...this.filters.keys()]) {
       if (!tabIds.has(id)) this.filters.delete(id);

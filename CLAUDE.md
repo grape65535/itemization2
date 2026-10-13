@@ -58,7 +58,8 @@ javascripts/               （index.html での読み込み順）
   スタイルは `RichText.intern()` で共有したオブジェクトを参照で比較する。文字列を変えたらスタイル配列の長さも合わせること。
 - UI 状態（選択・文字入力中アイテム）は ID で保持する。Undo で文書オブジェクトが作り直されるため。
 - フィルタの条件とフィルタ中か（`active`）、[+] で隠すアイテムの ID（`hidden`。フィルタ後の開閉状態）は文書のタブ（`tab.filter`）に保存する。
-  適用時に `refilterTabs()` が `tab.filter.hidden` を作り直し、`commit()`・Undo/Redo 後・起動時に `syncFilters()` が UI 側の Set（`Application.filters`）へ写す。
+  フィルタの適用（ダイアログの OK）時だけ `Model.applyFilter()` が `tab.filter.hidden` と折り畳み状態を作り直す（再読み込み・ファイルを開いた時はかけ直さない）。
+  `commit()`・Undo/Redo 後・起動時に `syncFilters()` が UI 側の Set（`Application.filters`）へ写す。
   [+] の展開・ツリーを全て開くは `Model.unhideFiltered()` で `tab.filter.hidden` から除く（commit を通す）。[+] で隠すアイテムの ID を `hidden` に持ち、
   `TreeLayout.compute` が連続する兄弟を 1 つの [+]（`layout.placeholders`。`order`・`nodes` には含まない）にまとめる。
   「非表示にする」で隠したアイテムは文書の `item.hidden` に持ち、`TreeLayout.compute` がフィルタの `hidden` と合わせて同じ [+] にまとめる。

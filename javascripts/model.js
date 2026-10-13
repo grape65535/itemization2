@@ -152,6 +152,14 @@ const Model = {
     return plan;
   },
 
+  // タブにフィルタをかける（「フィルタを設定」の OK）：ヒットしないアイテムを [+] で隠し（tab.filter.hidden に記録）、
+  // 折り畳み状態・非表示も filterPlan のとおりにする。フィルタ後の開閉状態はこれでリセットされる
+  applyFilter(tab) {
+    const plan = Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options));
+    Model.applyFilterCollapse(tab.root, plan);
+    tab.filter.hidden = [...plan.hidden];
+  },
+
   // フィルタ中のタブで、[+] で隠しているアイテム（tab.filter.hidden）から ids を除く
   unhideFiltered(tab, ids) {
     if (!tab.filter || !Array.isArray(tab.filter.hidden)) return;
@@ -208,6 +216,10 @@ const Model = {
         fixed.options = Model.normalizeOptions(tab && tab.options);
         const filter = Model.normalizeFilter(tab && tab.filter);
         if (filter) fixed.filter = filter;
+        // フィルタ後の開閉状態が無い（旧形式の）フィルタ中のタブは、折り畳み状態を変えずに [+] で隠すアイテムだけを求める
+        if (filter && filter.active && !filter.hidden) {
+          filter.hidden = [...Model.filterPlan(fixed.root, Model.filterMatcher(filter, fixed.options)).hidden];
+        }
         return fixed;
       }),
     };
