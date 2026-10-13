@@ -3,7 +3,8 @@
 // 保存データ（JSON）のツリー操作
 //   Document = { format, tabs: [Tab] }
 //   Tab      = { id, name?, root: Item, options: TabOptions, filter?: TabFilter }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
-//   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active }（フィルタの条件と、フィルタ中か）
+//   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active, hidden? }
+//              （フィルタの条件と、フィルタ中か。hidden はフィルタ中に [+] で隠しているアイテムの ID（フィルタ後の開閉状態））
 //   TabOptions = { parentAlign: 'center'|'top', followScroll, maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
 //   Item     = { id, text, collapsed, children: [Item], spans?, fill?, align?, status?, hidden? }
 //              （装飾は richText.js を参照、status はステータス名、hidden は「非表示にする」で [+] に隠したか（true のみ記録。ルートには付けない））
@@ -74,6 +75,7 @@ const Model = {
       hideNoStatus: !!raw.hideNoStatus,
       active: !!raw.active,
     };
+    if (filter.active && Array.isArray(raw.hidden)) filter.hidden = raw.hidden.filter((id) => typeof id === 'string' && id);
     if (!Model.filterHasCondition(filter)) return null;
     try {
       Model.filterMatcher(filter, null);
@@ -138,6 +140,13 @@ const Model = {
     return plan;
   },
 
+  // フィルタ中のタブで、[+] で隠しているアイテム（tab.filter.hidden）から ids を除く
+  unhideFiltered(tab, ids) {
+    if (!tab.filter || !Array.isArray(tab.filter.hidden)) return;
+    const remove = new Set(ids);
+    tab.filter.hidden = tab.filter.hidden.filter((id) => !remove.has(id));
+  },
+
   // filterPlan の展開・折り畳みをツリーに反映する。表示するアイテム（ヒットとその祖先）は「非表示にする」も解除する
   applyFilterCollapse(root, plan) {
     const walk = (item) => {
@@ -189,12 +198,16 @@ const Model = {
 
   // タブとその全アイテムに新しい ID を振る（外部ファイルから追加する時に既存の ID と重ならないように）
   reassignIds(tab) {
+    const map = new Map();
     const walk = (item) => {
-      item.id = Util.newId();
+      const id = Util.newId();
+      map.set(item.id, id);
+      item.id = id;
       item.children.forEach(walk);
     };
     tab.id = Util.newId();
     walk(tab.root);
+    if (tab.filter && Array.isArray(tab.filter.hidden)) tab.filter.hidden = tab.filter.hidden.filter((id) => map.has(id)).map((id) => map.get(id));
     return tab;
   },
 

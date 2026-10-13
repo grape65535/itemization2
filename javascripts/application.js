@@ -4,13 +4,11 @@
 class Application {
   constructor(rootEl) {
     this.doc = Storage.loadDocument() || Model.createDocument();
-    this.filters = new Map(); // タブ ID -> フィルタ中の表示 { key: 条件, hidden: [+] で隠すアイテムの ID の Set }（[+] の展開状態は保存しない）
-    // 再読み込み前にフィルタ中だったタブは、記録した条件でフィルタをかけた状態から始める
-    if (this.doc.tabs.some((t) => t.filter && t.filter.active)) {
-      this.refilterTabs(this.doc.tabs);
-      Storage.saveDocument(JSON.stringify(this.doc));
-    }
+    this.filters = new Map(); // タブ ID -> フィルタ中の表示 { hidden: [+] で隠すアイテムの ID の Set }（文書の tab.filter.hidden から作る）
+    // フィルタ後の開閉状態が記録されていない（旧形式の）フィルタ中のタブは、記録した条件でフィルタをかけた状態から始める
+    if (this.refilterTabs(this.doc.tabs, true)) Storage.saveDocument(JSON.stringify(this.doc));
     this.reindex();
+    this.syncFilters();
     const ui = Storage.loadUi();
     this.activeTabId = this.findTab(ui.activeTabId) ? ui.activeTabId : this.doc.tabs[0].id;
     this.selection = new Set();
@@ -321,7 +319,7 @@ class Application {
       }
       this.finishInput();
       this.commit((doc) => {
-        this.refilterTabs(tabs); // フィルタ中で保存されたタブは、フィルタをかけた状態で開く
+        this.refilterTabs(tabs, true); // フィルタ後の開閉状態が無いフィルタ中のタブは、フィルタをかけた状態で開く
         doc.tabs.push(...tabs);
         this.setActiveTab(tabs[tabs.length - 1].id);
         return { tabId: this.activeTabId };
@@ -364,25 +362,26 @@ class Application {
   // ---- ツリーを全て開く／閉じる ----
 
   // 選択アイテム（無ければルート）とその全ての子孫を開く／閉じる。子のあるアイテムだけを対象にする。
-  // 開く時は、子孫のうちフィルタ・非表示の [+] で隠したアイテムも表示する（フィルタの分は表示状態のみ・Undo 対象外）
+  // 開く時は、子孫のうちフィルタ・非表示の [+] で隠したアイテムも表示する
   setTreeCollapsed(collapsed) {
     this.editor.end();
     const ids = this.selectedIds();
     const targets = ids.length ? ids : [this.activeTab.root.id];
-    const filter = this.activeFilter;
-    const changed = this.commit((doc) => {
+    this.commit((doc) => {
+      const tab = doc.tabs.find((t) => t.id === this.activeTabId);
+      const opened = [];
       const walk = (item) => {
         if (item.children.length > 0) item.collapsed = collapsed;
         if (!collapsed) {
           delete item.hidden;
-          if (filter) filter.hidden.delete(item.id);
+          opened.push(item.id);
         }
         item.children.forEach(walk);
       };
       for (const id of targets) walk(Model.locate(doc, id).item);
+      Model.unhideFiltered(tab, opened);
       return { itemId: targets[0] };
     }, { itemId: targets[0] });
-    if (!changed && !collapsed) this.mainArea.render(); // フィルタの [+] だけを開いた時
   }
 
   // ---- ステータス ----
@@ -523,52 +522,48 @@ class Application {
     this.mainArea.draw();
   }
 
-  // フィルタ中のタブにフィルタをかけ直す（適用時・起動時・ファイルを開いた時）。
-  // [+] の展開状態は記憶しないため、ヒットしないアイテムを隠し直し、折り畳み状態も適用時と同じにする
-  refilterTabs(tabs) {
+  // フィルタ中のタブにフィルタをかけ直す：ヒットしないアイテムを [+] で隠し（tab.filter.hidden に記録）、折り畳み状態も適用時の状態にする。
+  // 適用時はフィルタ後の開閉状態をリセットする。onlyMissing: フィルタ後の開閉状態が記録されていないタブだけ（起動時・ファイルを開いた時）。
+  // かけ直したタブがあれば true
+  refilterTabs(tabs, onlyMissing = false) {
+    let changed = false;
     for (const tab of tabs) {
       if (!tab.filter || !tab.filter.active) continue;
+      if (onlyMissing && Array.isArray(tab.filter.hidden)) continue;
       const plan = Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options));
       Model.applyFilterCollapse(tab.root, plan);
-      this.filters.set(tab.id, { key: Application.filterKey(tab.filter), hidden: plan.hidden });
+      tab.filter.hidden = [...plan.hidden];
+      changed = true;
     }
+    return changed;
   }
 
-  static filterKey(filter) {
-    return JSON.stringify([filter.text, filter.ignoreCase, filter.regex, filter.hideStatuses, filter.hideUnregistered, filter.hideNoStatus]);
-  }
-
-  // 文書のフィルタ状態（Undo/Redo などで変わる）に、[+] で隠すアイテムを合わせる。
-  // 条件が同じなら [+] の展開状態を保ち、変わったら（折り畳み状態は変えずに）隠し直す
+  // 文書のフィルタ状態（tab.filter の active・hidden。Undo/Redo などで変わる）に、[+] で隠すアイテムを合わせる
   syncFilters() {
     const tabIds = new Set();
     for (const tab of this.doc.tabs) {
       if (!tab.filter || !tab.filter.active) continue;
       tabIds.add(tab.id);
-      const key = Application.filterKey(tab.filter);
-      const entry = this.filters.get(tab.id);
-      if (entry && entry.key === key) continue;
-      this.filters.set(tab.id, { key, hidden: Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options)).hidden });
+      const hidden = Array.isArray(tab.filter.hidden) ? tab.filter.hidden
+        : Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options)).hidden;
+      this.filters.set(tab.id, { hidden: new Set(hidden) });
     }
     for (const id of [...this.filters.keys()]) {
       if (!tabIds.has(id)) this.filters.delete(id);
     }
   }
 
-  // フィルタ・非表示の [+] をクリック：隠れていたアイテムを表示する。
-  // フィルタで隠したものは表示状態だけを変え（再び隠すにはフィルタを適用し直す）、非表示にしたものは文書から解除する（Undo の対象）
+  // フィルタ・非表示の [+] をクリック：隠れていたアイテムを表示する（tab.filter.hidden・item.hidden から除く。Undo の対象）
   revealHidden(ids) {
-    const filter = this.activeFilter;
-    if (filter) for (const id of ids) filter.hidden.delete(id);
-    const marked = ids.filter((id) => this.index.get(id).item.hidden);
-    if (marked.length === 0) {
-      this.mainArea.render();
-      return;
-    }
-    const itemId = this.index.get(marked[0]).parent.id;
+    if (ids.length === 0) return;
+    const itemId = this.index.get(ids[0]).parent.id;
     this.commit((doc) => {
-      for (const id of marked) delete Model.locate(doc, id).item.hidden;
-      return { itemId: marked[0] };
+      for (const id of ids) {
+        const loc = Model.locate(doc, id);
+        delete loc.item.hidden;
+        Model.unhideFiltered(loc.tab, [id]);
+      }
+      return { itemId: ids[0] };
     }, { itemId });
   }
 
@@ -609,7 +604,10 @@ class Application {
     const tabId = this.activeTabId;
     this.commit((doc) => {
       const tab = doc.tabs.find((t) => t.id === tabId);
-      if (tab.filter) tab.filter.active = false;
+      if (tab.filter) {
+        tab.filter.active = false;
+        delete tab.filter.hidden;
+      }
       return { tabId };
     }, { tabId });
   }
