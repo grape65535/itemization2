@@ -433,6 +433,36 @@ class Application {
     this.mainArea.draw();
   }
 
+  // 選択中アイテムの子孫（折り畳み中も含む。フィルタで隠れたアイテムは除く）を選択に加える
+  selectDescendants() {
+    const ids = this.selectedIds();
+    if (ids.length === 0) return;
+    this.editor.end();
+    const filter = this.activeFilter;
+    const walk = (item) => {
+      if (filter && filter.hidden.has(item.id)) return;
+      this.selection.add(item.id);
+      item.children.forEach(walk);
+    };
+    for (const id of ids) this.index.get(id).item.children.forEach(walk);
+    this.mainArea.draw();
+  }
+
+  // 選択中アイテムの兄弟（自身を含む。フィルタで隠れたアイテムは除く）を選択に加える
+  selectSiblings() {
+    const ids = this.selectedIds();
+    if (ids.length === 0) return;
+    this.editor.end();
+    for (const id of ids) {
+      const parent = this.index.get(id).parent;
+      if (!parent) continue; // ルートには兄弟が無い
+      for (const child of parent.children) {
+        if (!this.isFilteredOut(child.id)) this.selection.add(child.id);
+      }
+    }
+    this.mainArea.draw();
+  }
+
   // 選択中アイテムのコピー用データ。選択が無ければ null
   clipboardData() {
     const ids = this.selectedIds();

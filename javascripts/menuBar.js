@@ -20,7 +20,14 @@ class MenuBar {
           { label: '元に戻す', shortcut: 'Ctrl+Z', action: () => app.undo(), enabled: () => app.history.canUndo() },
           { label: 'やり直す', shortcut: 'Ctrl+Shift+Z', action: () => app.redo(), enabled: () => app.history.canRedo() },
           { separator: true },
-          { label: '全て選択', shortcut: 'Ctrl+A', action: () => app.selectAll() },
+          {
+            label: '選択',
+            submenu: () => [
+              { label: '全て選択', shortcut: 'Ctrl+A', action: () => app.selectAll() },
+              { label: '子を全て選択', action: () => app.selectDescendants(), enabled: () => app.selectedIds().length > 0 },
+              { label: '同階層を全て選択', action: () => app.selectSiblings(), enabled: () => app.selectedIds().length > 0 },
+            ],
+          },
           { label: 'コピー', shortcut: 'Ctrl+C', action: () => app.menuCopy(false), enabled: () => app.selectedIds().length > 0 },
           {
             label: '形式を指定してコピー',
@@ -152,7 +159,7 @@ class MenuBar {
     el.style.top = Math.max(0, Math.min(y, window.innerHeight - r.height - 4)) + 'px';
   }
 
-  // サブメニュー: def.submenu() の [{ label, badge?, action, enabled? }] を表示する（無効なら開かない）
+  // サブメニュー: def.submenu() の [{ label, badge?, shortcut?, action, enabled? }] を表示する（無効なら開かない）
   openSubmenu(menu, item, def) {
     if (this.submenu && this.submenu.item === item) return;
     this.closeSubmenu();
@@ -167,6 +174,7 @@ class MenuBar {
     for (const entry of entries) {
       const sub = Util.el('button', 'menu-item');
       sub.append(entry.badge || Util.el('span', 'menu-item-label', entry.label));
+      if (entry.shortcut) sub.append(Util.el('span', 'menu-item-shortcut', entry.shortcut));
       sub.disabled = entry.enabled ? !entry.enabled() : false;
       sub.addEventListener('click', () => {
         this.closeAll();
