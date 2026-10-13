@@ -566,7 +566,7 @@ class ItemEditor {
         this.start(node.parentId, { line: lineIndex, pos: 'end' });
         return;
       case 'ArrowRight': {
-        const child = node.children.find((c) => !c.placeholder); // フィルタで隠したアイテムには移らない
+        const child = node.children.find((c) => !c.placeholder); // フィルタ・非表示で隠したアイテムには移らない
         if (start !== line.end || !child) return;
         e.preventDefault();
         this.start(child.id, { line: lineIndex, pos: 'start' });

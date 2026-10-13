@@ -5,7 +5,8 @@
 //   Tab      = { id, name?, root: Item, options: TabOptions, filter?: TabFilter }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
 //   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active }（フィルタの条件と、フィルタ中か）
 //   TabOptions = { parentAlign: 'center'|'top', followScroll, maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
-//   Item     = { id, text, collapsed, children: [Item], spans?, fill?, align?, status? }（装飾は richText.js を参照、status はステータス名）
+//   Item     = { id, text, collapsed, children: [Item], spans?, fill?, align?, status?, hidden? }
+//              （装飾は richText.js を参照、status はステータス名、hidden は「非表示にする」で [+] に隠したか（true のみ記録。ルートには付けない））
 const Model = {
   FORMAT: 1,
 
@@ -121,7 +122,7 @@ const Model = {
       return hit || found;
     };
     visit(root);
-    const plan = { hidden: new Set(), expand: new Set(), collapse: new Set() };
+    const plan = { hidden: new Set(), expand: new Set(), collapse: new Set(), shown: new Set(below.keys()) };
     const walk = (item) => {
       if (below.get(item.id) || (item === root && !test(item))) {
         if (item.children.length) plan.expand.add(item.id);
@@ -137,9 +138,10 @@ const Model = {
     return plan;
   },
 
-  // filterPlan の展開・折り畳みをツリーに反映する
+  // filterPlan の展開・折り畳みをツリーに反映する。表示するアイテム（ヒットとその祖先）は「非表示にする」も解除する
   applyFilterCollapse(root, plan) {
     const walk = (item) => {
+      if (plan.shown.has(item.id)) delete item.hidden;
       if (plan.expand.has(item.id)) item.collapsed = false;
       if (plan.collapse.has(item.id)) item.collapsed = true;
       item.children.forEach(walk);
@@ -162,17 +164,20 @@ const Model = {
     };
     const fixItem = (item) => {
       if (!item || typeof item !== 'object') return Model.createItem();
-      return Model.assignStatus(RichText.assignDecoration({
+      const fixed = Model.assignStatus(RichText.assignDecoration({
         id: uniqueId(item.id),
         text: typeof item.text === 'string' ? item.text : '',
         collapsed: !!item.collapsed,
         children: Array.isArray(item.children) ? item.children.map(fixItem) : [],
       }, item), item.status);
+      if (item.hidden === true) fixed.hidden = true;
+      return fixed;
     };
     return {
       format: Model.FORMAT,
       tabs: raw.tabs.map((tab) => {
         const fixed = { id: uniqueId(tab && tab.id), root: fixItem(tab && tab.root) };
+        delete fixed.root.hidden;
         if (tab && typeof tab.name === 'string' && tab.name) fixed.name = tab.name;
         fixed.options = Model.normalizeOptions(tab && tab.options);
         const filter = Model.normalizeFilter(tab && tab.filter);

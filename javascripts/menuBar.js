@@ -70,6 +70,8 @@ class MenuBar {
         items: [
           { label: 'ツリーを全て開く', shortcut: ';', action: () => app.setTreeCollapsed(false) },
           { label: 'ツリーを全て閉じる', shortcut: '-', action: () => app.setTreeCollapsed(true) },
+          { separator: true },
+          { label: '非表示にする', action: () => app.hideSelected(), enabled: () => app.selectedIds().length > 0 },
         ],
       },
       {

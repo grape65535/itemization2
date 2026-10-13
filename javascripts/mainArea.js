@@ -267,7 +267,7 @@ class MainArea {
       this.app.toggleCollapse(hit.id);
       return;
     }
-    // フィルタで隠したアイテムの [+]：隠れていたアイテムを表示する
+    // フィルタ・非表示で隠したアイテムの [+]：隠れていたアイテムを表示する
     if (hit && hit.type === 'placeholder') {
       this.app.revealHidden(hit.node.hiddenIds);
       return;
@@ -437,7 +437,7 @@ class MainArea {
   }
 
   // ドロップ先 { id, mode, node }（node は表示位置）：アイテム上部 3 割＝直前の兄弟、下部 3 割＝直後の兄弟、中央＝最後の子（ルートは常に子）。
-  // フィルタで隠したアイテムの [+] は、上半分＝隠れた最初のアイテムの前、下半分＝最後のアイテムの後（子にはできない）
+  // フィルタ・非表示で隠したアイテムの [+] は、上半分＝隠れた最初のアイテムの前、下半分＝最後のアイテムの後（子にはできない）
   dropTarget(p) {
     const gap = Config.verticalGap / 2;
     for (const n of this.layout.placeholders) {

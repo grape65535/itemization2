@@ -60,7 +60,8 @@ javascripts/               （index.html での読み込み順）
 - フィルタの条件とフィルタ中か（`active`）は文書のタブ（`tab.filter`）に保存する。[+] で隠すアイテムは UI 状態（`Application.filters`）で、
   `commit()`・Undo/Redo 後に `syncFilters()`、起動時・ファイルを開いた時に `refilterTabs()` で作り直す。[+] で隠すアイテムの ID を `hidden` に持ち、
   `TreeLayout.compute` が連続する兄弟を 1 つの [+]（`layout.placeholders`。`order`・`nodes` には含まない）にまとめる。
-  隠れたアイテムは `Application.isFilteredOut()` で判定し、選択・コピー等の対象から除く。
+  「非表示にする」で隠したアイテムは文書の `item.hidden` に持ち、`TreeLayout.compute` がフィルタの `hidden` と合わせて同じ [+] にまとめる。
+  隠れたアイテム（フィルタ・非表示）は `Application.isHidden()`（祖先も見る）・`isHiddenItem()`（自身のみ）で判定し、選択・コピー等の対象から除く。
 - 「スクロールに追従する」は `MainArea.followScroll()` が配置どおりの `node.baseY` から `node.y` を書き換える（描画・ヒットテスト・文字入力は node.y を使うので追従する）。
   SVG/PDF は `MainArea.exportScene()` で baseY の位置から作る。
 - バージョンを上げる時は `config.js` の `version` と `index.html` の `?v=` をすべて更新する。
