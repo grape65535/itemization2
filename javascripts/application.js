@@ -273,16 +273,17 @@ class Application {
   }
 
   // 選択中のアイテムを削除し、子をその位置に繰り上げる（ルートは削除しない）。
-  // withDescendants: 子を繰り上げず、子孫（折り畳み・非表示・フィルタで隠れたものも含む）ごと削除する
+  // withDescendants: 子を繰り上げず、子孫（折り畳み・非表示・フィルタで隠れたものも含む）ごと削除する（ルートはルートを残して子孫を削除）
   deleteSelected(withDescendants = false) {
     const ids = [...this.selection]
       .filter((id) => {
         const entry = this.index.get(id);
-        return entry && entry.parent && entry.tab.id === this.activeTabId && !this.isHidden(id);
+        return entry && (entry.parent || withDescendants) && entry.tab.id === this.activeTabId && !this.isHidden(id);
       })
       .sort((a, b) => this.index.get(a).order - this.index.get(b).order);
     if (ids.length === 0) return;
-    const parentId = this.index.get(ids[0]).parent.id;
+    const first = this.index.get(ids[0]);
+    const parentId = first.parent ? first.parent.id : first.item.id;
     this.commit((doc) => {
       for (const id of ids) {
         if (withDescendants) Model.removeSubtree(doc, id);
