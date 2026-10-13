@@ -371,6 +371,7 @@ class Application {
     this.commit((doc) => {
       const walk = (item) => {
         if (item.children.length > 0) item.collapsed = collapsed;
+        if (!collapsed) delete item.hidden; // 開く時は「非表示にする」で隠した子孫も表示する
         item.children.forEach(walk);
       };
       for (const id of targets) walk(Model.locate(doc, id).item);

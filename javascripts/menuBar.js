@@ -85,11 +85,13 @@ class MenuBar {
     // アイテムの右クリックメニュー（項目は編集メニューと共通）
     const editItems = this.menus.find((m) => m.label === '編集').items;
     const pick = (label) => editItems.find((d) => d.label === label);
+    const hideItem = this.menus.find((m) => m.label === '表示').items.find((d) => d.label === '非表示にする');
     this.contextItems = [
       pick('コピー'), pick('切り取り'), pick('貼り付け'), { separator: true },
       pick('アイテムを追加'), pick('アイテムを削除'), { separator: true },
       pick('ステータスを設定'), pick('ステータスを削除'), { separator: true },
-      pick('フィルタを設定'), pick('フィルタを削除'),
+      pick('フィルタを設定'), pick('フィルタを削除'), { separator: true },
+      hideItem,
     ];
     // アイテム外の右クリックメニュー
     this.contextOutsideItems = [pick('フィルタを設定'), pick('フィルタを削除')];
