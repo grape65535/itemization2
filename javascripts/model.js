@@ -3,14 +3,28 @@
 // 保存データ（JSON）のツリー操作
 //   Document = { format, tabs: [Tab] }
 //   Tab      = { id, name?, root: Item, options: TabOptions, filter?: TabFilter }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
-//   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active }（フィルタの条件と、フィルタ中か）
+//   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active, hidden? }
+//              （フィルタの条件と、フィルタ中か。hidden はフィルタ中に [+] で隠しているアイテムの ID（フィルタ後の開閉状態））
 //   TabOptions = { parentAlign: 'center'|'top', followScroll, maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
-//   Item     = { id, text, collapsed, children: [Item], spans?, fill?, align?, status? }（装飾は richText.js を参照、status はステータス名）
+//   Item     = { id, text, collapsed, children: [Item], created, updated, spans?, fill?, align?, status?, hidden? }
+//              （created・updated は登録日時・更新日時の ISO 8601 文字列（UTC）。更新日時は文字列・ステータスの変更時に更新する）
+//              （装飾は richText.js を参照、status はステータス名、hidden は「非表示にする」で [+] に隠したか（true のみ記録。ルートには付けない））
 const Model = {
   FORMAT: 1,
 
   createItem(text = '') {
-    return { id: Util.newId(), text, collapsed: false, children: [] };
+    const now = Model.now();
+    return { id: Util.newId(), text, collapsed: false, children: [], created: now, updated: now };
+  },
+
+  // 登録日時・更新日時に記録する現在日時
+  now() {
+    return new Date().toISOString();
+  },
+
+  // 日時の文字列として正しければそのまま、でなければ null
+  validTime(value) {
+    return typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null;
   },
 
   createTab() {
@@ -73,6 +87,7 @@ const Model = {
       hideNoStatus: !!raw.hideNoStatus,
       active: !!raw.active,
     };
+    if (filter.active && Array.isArray(raw.hidden)) filter.hidden = raw.hidden.filter((id) => typeof id === 'string' && id);
     if (!Model.filterHasCondition(filter)) return null;
     try {
       Model.filterMatcher(filter, null);
@@ -121,7 +136,7 @@ const Model = {
       return hit || found;
     };
     visit(root);
-    const plan = { hidden: new Set(), expand: new Set(), collapse: new Set() };
+    const plan = { hidden: new Set(), expand: new Set(), collapse: new Set(), shown: new Set(below.keys()) };
     const walk = (item) => {
       if (below.get(item.id) || (item === root && !test(item))) {
         if (item.children.length) plan.expand.add(item.id);
@@ -137,9 +152,25 @@ const Model = {
     return plan;
   },
 
-  // filterPlan の展開・折り畳みをツリーに反映する
+  // タブにフィルタをかける（「フィルタを設定」の OK）：ヒットしないアイテムを [+] で隠し（tab.filter.hidden に記録）、
+  // 折り畳み状態・非表示も filterPlan のとおりにする。フィルタ後の開閉状態はこれでリセットされる
+  applyFilter(tab) {
+    const plan = Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options));
+    Model.applyFilterCollapse(tab.root, plan);
+    tab.filter.hidden = [...plan.hidden];
+  },
+
+  // フィルタ中のタブで、[+] で隠しているアイテム（tab.filter.hidden）から ids を除く
+  unhideFiltered(tab, ids) {
+    if (!tab.filter || !Array.isArray(tab.filter.hidden)) return;
+    const remove = new Set(ids);
+    tab.filter.hidden = tab.filter.hidden.filter((id) => !remove.has(id));
+  },
+
+  // filterPlan の展開・折り畳みをツリーに反映する。表示するアイテム（ヒットとその祖先）は「非表示にする」も解除する
   applyFilterCollapse(root, plan) {
     const walk = (item) => {
+      if (plan.shown.has(item.id)) delete item.hidden;
       if (plan.expand.has(item.id)) item.collapsed = false;
       if (plan.collapse.has(item.id)) item.collapsed = true;
       item.children.forEach(walk);
@@ -162,21 +193,33 @@ const Model = {
     };
     const fixItem = (item) => {
       if (!item || typeof item !== 'object') return Model.createItem();
-      return Model.assignStatus(RichText.assignDecoration({
+      const fixed = Model.assignStatus(RichText.assignDecoration({
         id: uniqueId(item.id),
         text: typeof item.text === 'string' ? item.text : '',
         collapsed: !!item.collapsed,
         children: Array.isArray(item.children) ? item.children.map(fixItem) : [],
       }, item), item.status);
+      // 日時の無い（旧形式の）アイテムは、もう一方の日時か読み込んだ日時で補う
+      const created = Model.validTime(item.created);
+      const updated = Model.validTime(item.updated);
+      fixed.created = created || updated || Model.now();
+      fixed.updated = updated || fixed.created;
+      if (item.hidden === true) fixed.hidden = true;
+      return fixed;
     };
     return {
       format: Model.FORMAT,
       tabs: raw.tabs.map((tab) => {
         const fixed = { id: uniqueId(tab && tab.id), root: fixItem(tab && tab.root) };
+        delete fixed.root.hidden;
         if (tab && typeof tab.name === 'string' && tab.name) fixed.name = tab.name;
         fixed.options = Model.normalizeOptions(tab && tab.options);
         const filter = Model.normalizeFilter(tab && tab.filter);
         if (filter) fixed.filter = filter;
+        // フィルタ後の開閉状態が無い（旧形式の）フィルタ中のタブは、折り畳み状態を変えずに [+] で隠すアイテムだけを求める
+        if (filter && filter.active && !filter.hidden) {
+          filter.hidden = [...Model.filterPlan(fixed.root, Model.filterMatcher(filter, fixed.options)).hidden];
+        }
         return fixed;
       }),
     };
@@ -184,12 +227,16 @@ const Model = {
 
   // タブとその全アイテムに新しい ID を振る（外部ファイルから追加する時に既存の ID と重ならないように）
   reassignIds(tab) {
+    const map = new Map();
     const walk = (item) => {
-      item.id = Util.newId();
+      const id = Util.newId();
+      map.set(item.id, id);
+      item.id = id;
       item.children.forEach(walk);
     };
     tab.id = Util.newId();
     walk(tab.root);
+    if (tab.filter && Array.isArray(tab.filter.hidden)) tab.filter.hidden = tab.filter.hidden.filter((id) => map.has(id)).map((id) => map.get(id));
     return tab;
   },
 
@@ -228,6 +275,15 @@ const Model = {
     const loc = Model.locate(doc, id);
     if (!loc || !loc.parent) return false;
     loc.parent.children.splice(loc.index, 1, ...loc.item.children);
+    return true;
+  },
+
+  // アイテムを子孫ごと削除する。ルートはルートを残して子孫を全て削除する（祖先と一緒に削除済みなら何もしない）
+  removeSubtree(doc, id) {
+    const loc = Model.locate(doc, id);
+    if (!loc) return false;
+    if (loc.parent) loc.parent.children.splice(loc.index, 1);
+    else loc.item.children = [];
     return true;
   },
 

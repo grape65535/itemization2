@@ -119,6 +119,7 @@ class ItemEditor {
     const decoration = { spans, fill: this.fill, align: this.align };
     this.app.commit((doc) => {
       const target = Model.locate(doc, id).item;
+      if (target.text !== text) target.updated = Model.now(); // 装飾だけの変更では更新日時を変えない
       target.text = text;
       RichText.assignDecoration(target, decoration);
     }, { itemId: id });
@@ -566,7 +567,7 @@ class ItemEditor {
         this.start(node.parentId, { line: lineIndex, pos: 'end' });
         return;
       case 'ArrowRight': {
-        const child = node.children.find((c) => !c.placeholder); // フィルタで隠したアイテムには移らない
+        const child = node.children.find((c) => !c.placeholder); // フィルタ・非表示で隠したアイテムには移らない
         if (start !== line.end || !child) return;
         e.preventDefault();
         this.start(child.id, { line: lineIndex, pos: 'start' });

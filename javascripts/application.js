@@ -3,14 +3,12 @@
 // アプリ全体の状態（文書・アクティブタブ・選択・履歴）と画面部品の統括
 class Application {
   constructor(rootEl) {
-    this.doc = Storage.loadDocument() || Model.createDocument();
-    this.filters = new Map(); // タブ ID -> フィルタ中の表示 { key: 条件, hidden: [+] で隠すアイテムの ID の Set }（[+] の展開状態は保存しない）
-    // 再読み込み前にフィルタ中だったタブは、記録した条件でフィルタをかけた状態から始める
-    if (this.doc.tabs.some((t) => t.filter && t.filter.active)) {
-      this.refilterTabs(this.doc.tabs);
-      Storage.saveDocument(JSON.stringify(this.doc));
-    }
+    const loaded = Storage.loadDocument();
+    this.doc = loaded || Model.createDocument();
+    if (loaded) Storage.saveDocument(JSON.stringify(this.doc)); // 読み込み時に補った値（旧形式のアイテムの日時など）を保存する
+    this.filters = new Map(); // タブ ID -> フィルタ中の表示 { hidden: [+] で隠すアイテムの ID の Set }（文書の tab.filter.hidden から作る）
     this.reindex();
+    this.syncFilters();
     const ui = Storage.loadUi();
     this.activeTabId = this.findTab(ui.activeTabId) ? ui.activeTabId : this.doc.tabs[0].id;
     this.selection = new Set();
@@ -98,7 +96,7 @@ class Application {
     const ids = [];
     for (const id of this.selection) {
       const entry = this.index.get(id);
-      if (!entry || !entry.parent || entry.tab.id !== this.activeTabId || this.isFilteredOut(id)) continue;
+      if (!entry || !entry.parent || entry.tab.id !== this.activeTabId || this.isHidden(id)) continue;
       let ancestorSelected = false;
       for (let e = this.index.get(entry.parent.id); e; e = e.parent && this.index.get(e.parent.id)) {
         if (this.selection.has(e.item.id)) {
@@ -274,18 +272,23 @@ class Application {
     this.mainArea.scrollIntoView(newId);
   }
 
-  // 選択中のアイテムを削除し、子をその位置に繰り上げる（ルートは削除しない）
-  deleteSelected() {
+  // 選択中のアイテムを削除し、子をその位置に繰り上げる（ルートは削除しない）。
+  // withDescendants: 子を繰り上げず、子孫（折り畳み・非表示・フィルタで隠れたものも含む）ごと削除する（ルートはルートを残して子孫を削除）
+  deleteSelected(withDescendants = false) {
     const ids = [...this.selection]
       .filter((id) => {
         const entry = this.index.get(id);
-        return entry && entry.parent && entry.tab.id === this.activeTabId && !this.isFilteredOut(id);
+        return entry && (entry.parent || withDescendants) && entry.tab.id === this.activeTabId && !this.isHidden(id);
       })
       .sort((a, b) => this.index.get(a).order - this.index.get(b).order);
     if (ids.length === 0) return;
-    const parentId = this.index.get(ids[0]).parent.id;
+    const first = this.index.get(ids[0]);
+    const parentId = first.parent ? first.parent.id : first.item.id;
     this.commit((doc) => {
-      for (const id of ids) Model.removePromote(doc, id);
+      for (const id of ids) {
+        if (withDescendants) Model.removeSubtree(doc, id);
+        else Model.removePromote(doc, id);
+      }
       return { itemId: parentId };
     }, { itemId: ids[0] });
     this.selection.clear();
@@ -321,7 +324,6 @@ class Application {
       }
       this.finishInput();
       this.commit((doc) => {
-        this.refilterTabs(tabs); // フィルタ中で保存されたタブは、フィルタをかけた状態で開く
         doc.tabs.push(...tabs);
         this.setActiveTab(tabs[tabs.length - 1].id);
         return { tabId: this.activeTabId };
@@ -363,17 +365,25 @@ class Application {
 
   // ---- ツリーを全て開く／閉じる ----
 
-  // 選択アイテム（無ければルート）とその全ての子孫を開く／閉じる。子のあるアイテムだけを対象にする
+  // 選択アイテム（無ければルート）とその全ての子孫を開く／閉じる。子のあるアイテムだけを対象にする。
+  // 開く時は、子孫のうちフィルタ・非表示の [+] で隠したアイテムも表示する
   setTreeCollapsed(collapsed) {
     this.editor.end();
     const ids = this.selectedIds();
     const targets = ids.length ? ids : [this.activeTab.root.id];
     this.commit((doc) => {
+      const tab = doc.tabs.find((t) => t.id === this.activeTabId);
+      const opened = [];
       const walk = (item) => {
         if (item.children.length > 0) item.collapsed = collapsed;
+        if (!collapsed) {
+          delete item.hidden;
+          opened.push(item.id);
+        }
         item.children.forEach(walk);
       };
       for (const id of targets) walk(Model.locate(doc, id).item);
+      Model.unhideFiltered(tab, opened);
       return { itemId: targets[0] };
     }, { itemId: targets[0] });
   }
@@ -399,9 +409,64 @@ class Application {
     const ids = this.selectedIds();
     if (ids.length === 0) return;
     this.commit((doc) => {
-      for (const id of ids) Model.assignStatus(Model.locate(doc, id).item, name);
+      for (const id of ids) {
+        const item = Model.locate(doc, id).item;
+        const before = item.status;
+        Model.assignStatus(item, name);
+        if (item.status !== before) item.updated = Model.now();
+      }
       return { itemId: ids[0] };
     }, { itemId: ids[0] });
+  }
+
+  // ---- 並べ替え ----
+
+  // 選択中のアイテムを、親ごとに同階層の中で並べ替える（1 回の Undo で戻る）。
+  // 同じ親の選択アイテムが連続していなければ、最も兄のアイテムの位置から連続させて並べる。
+  // mode: 'status'（タブの設定のステータス順）/ 'created'（登録順）/ 'updated'（更新順）/ 'name'（名前順）/ 'reverse'（逆順）
+  sortSelected(mode) {
+    this.editor.end();
+    const ids = this.selectedIds();
+    if (ids.length === 0) return;
+    const groups = new Map(); // 親の ID -> 選択中の子の ID（文書順）
+    for (const id of ids) {
+      const parent = this.index.get(id).parent;
+      if (!parent) continue; // ルートは並べ替えない
+      if (!groups.has(parent.id)) groups.set(parent.id, []);
+      groups.get(parent.id).push(id);
+    }
+    if (groups.size === 0) return;
+    const tabId = this.activeTabId;
+    this.commit((doc) => {
+      const tab = doc.tabs.find((t) => t.id === tabId);
+      const compare = Application.sortComparator(mode, tab.options);
+      for (const [parentId, childIds] of groups) {
+        const parent = Model.locate(doc, parentId).item;
+        const picked = new Set(childIds);
+        const start = parent.children.findIndex((c) => picked.has(c.id));
+        const items = parent.children.filter((c) => picked.has(c.id));
+        const rest = parent.children.filter((c) => !picked.has(c.id));
+        // 安定ソート（同じ値なら元の順序を保つ）
+        const sorted = mode === 'reverse' ? items.reverse()
+          : items.map((item, i) => ({ item, i })).sort((a, b) => compare(a.item, b.item) || a.i - b.i).map((e) => e.item);
+        rest.splice(start, 0, ...sorted);
+        parent.children = rest;
+      }
+      return { itemId: ids[0] };
+    }, { itemId: ids[0] });
+  }
+
+  // 並べ替えの比較関数（reverse 以外）
+  static sortComparator(mode, options) {
+    if (mode === 'status') {
+      // 登録順のステータス → 未登録のステータス → ステータス無し
+      const names = options.statuses.map((s) => s.name);
+      const rank = (item) => (!item.status ? names.length + 1 : names.includes(item.status) ? names.indexOf(item.status) : names.length);
+      return (a, b) => rank(a) - rank(b);
+    }
+    if (mode === 'created' || mode === 'updated') return (a, b) => Date.parse(a[mode]) - Date.parse(b[mode]);
+    const collator = new Intl.Collator('ja', { numeric: true });
+    return (a, b) => collator.compare(a.text, b.text);
   }
 
   clearStatus() {
@@ -415,7 +480,7 @@ class Application {
     return [...this.selection]
       .filter((id) => {
         const entry = this.index.get(id);
-        return entry && entry.tab.id === this.activeTabId && !this.isFilteredOut(id);
+        return entry && entry.tab.id === this.activeTabId && !this.isHidden(id);
       })
       .sort((a, b) => this.index.get(a).order - this.index.get(b).order);
   }
@@ -423,13 +488,41 @@ class Application {
   selectAll() {
     this.editor.end();
     this.selection.clear();
-    const filter = this.activeFilter;
     const walk = (item) => {
-      if (filter && filter.hidden.has(item.id)) return; // フィルタで隠れたアイテムは選択しない
+      if (this.isHiddenItem(item)) return; // フィルタ・非表示で隠れたアイテムは選択しない
       this.selection.add(item.id);
       item.children.forEach(walk);
     };
     walk(this.activeTab.root);
+    this.mainArea.draw();
+  }
+
+  // 選択中アイテムの子孫（折り畳み中も含む。フィルタ・非表示で隠れたアイテムは除く）を選択に加える
+  selectDescendants() {
+    const ids = this.selectedIds();
+    if (ids.length === 0) return;
+    this.editor.end();
+    const walk = (item) => {
+      if (this.isHiddenItem(item)) return;
+      this.selection.add(item.id);
+      item.children.forEach(walk);
+    };
+    for (const id of ids) this.index.get(id).item.children.forEach(walk);
+    this.mainArea.draw();
+  }
+
+  // 選択中アイテムの兄弟（自身を含む。フィルタ・非表示で隠れたアイテムは除く）を選択に加える
+  selectSiblings() {
+    const ids = this.selectedIds();
+    if (ids.length === 0) return;
+    this.editor.end();
+    for (const id of ids) {
+      const parent = this.index.get(id).parent;
+      if (!parent) continue; // ルートには兄弟が無い
+      for (const child of parent.children) {
+        if (!this.isHidden(child.id)) this.selection.add(child.id);
+      }
+    }
     this.mainArea.draw();
   }
 
@@ -452,15 +545,21 @@ class Application {
     return this.filters.get(this.activeTabId) || null;
   }
 
-  // フィルタの [+] で隠れているアイテム（自身か祖先が隠れている）か
-  isFilteredOut(id) {
+  // フィルタ・非表示の [+] で隠れているアイテム（自身か祖先が隠れている）か
+  isHidden(id) {
     const entry = this.index.get(id);
-    const filter = entry && this.filters.get(entry.tab.id);
-    if (!filter) return false;
+    if (!entry) return false;
+    const filter = this.filters.get(entry.tab.id);
     for (let e = entry; e; e = e.parent && this.index.get(e.parent.id)) {
-      if (filter.hidden.has(e.item.id)) return true;
+      if (e.item.hidden || (filter && filter.hidden.has(e.item.id))) return true;
     }
     return false;
+  }
+
+  // 表示タブで、アイテム自身が [+] で隠れているか（祖先は見ない）
+  isHiddenItem(item) {
+    const filter = this.activeFilter;
+    return !!item.hidden || (!!filter && filter.hidden.has(item.id));
   }
 
   // 表示タブにフィルタを適用する（Model.filterPlan）。条件とフィルタ中であることをタブに記録し、
@@ -472,7 +571,7 @@ class Application {
     const changed = this.commit((doc) => {
       const tab = doc.tabs.find((t) => t.id === tabId);
       tab.filter = Object.assign({}, condition, { active: true });
-      this.refilterTabs([tab]);
+      Model.applyFilter(tab);
       return { tabId };
     }, { tabId });
     if (!changed) this.refresh();
@@ -482,44 +581,62 @@ class Application {
     this.mainArea.draw();
   }
 
-  // フィルタ中のタブにフィルタをかけ直す（適用時・起動時・ファイルを開いた時）。
-  // [+] の展開状態は記憶しないため、ヒットしないアイテムを隠し直し、折り畳み状態も適用時と同じにする
-  refilterTabs(tabs) {
-    for (const tab of tabs) {
-      if (!tab.filter || !tab.filter.active) continue;
-      const plan = Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options));
-      Model.applyFilterCollapse(tab.root, plan);
-      this.filters.set(tab.id, { key: Application.filterKey(tab.filter), hidden: plan.hidden });
-    }
-  }
-
-  static filterKey(filter) {
-    return JSON.stringify([filter.text, filter.ignoreCase, filter.regex, filter.hideStatuses, filter.hideUnregistered, filter.hideNoStatus]);
-  }
-
-  // 文書のフィルタ状態（Undo/Redo などで変わる）に、[+] で隠すアイテムを合わせる。
-  // 条件が同じなら [+] の展開状態を保ち、変わったら（折り畳み状態は変えずに）隠し直す
+  // 文書のフィルタ状態（tab.filter の active・hidden。Undo/Redo などで変わる）に、[+] で隠すアイテムを合わせる
   syncFilters() {
     const tabIds = new Set();
     for (const tab of this.doc.tabs) {
       if (!tab.filter || !tab.filter.active) continue;
       tabIds.add(tab.id);
-      const key = Application.filterKey(tab.filter);
-      const entry = this.filters.get(tab.id);
-      if (entry && entry.key === key) continue;
-      this.filters.set(tab.id, { key, hidden: Model.filterPlan(tab.root, Model.filterMatcher(tab.filter, tab.options)).hidden });
+      this.filters.set(tab.id, { hidden: new Set(tab.filter.hidden || []) });
     }
     for (const id of [...this.filters.keys()]) {
       if (!tabIds.has(id)) this.filters.delete(id);
     }
   }
 
-  // フィルタの [+] をクリック：隠れていたアイテムを表示する（再び隠すにはフィルタを適用し直す）
+  // フィルタ・非表示の [+] をクリック：隠れていたアイテムを表示する（tab.filter.hidden・item.hidden から除く。Undo の対象）
   revealHidden(ids) {
-    const filter = this.activeFilter;
-    if (!filter) return;
-    for (const id of ids) filter.hidden.delete(id);
-    this.mainArea.render();
+    if (ids.length === 0) return;
+    const itemId = this.index.get(ids[0]).parent.id;
+    this.commit((doc) => {
+      for (const id of ids) {
+        const loc = Model.locate(doc, id);
+        delete loc.item.hidden;
+        Model.unhideFiltered(loc.tab, [id]);
+      }
+      return { itemId: ids[0] };
+    }, { itemId });
+  }
+
+  // 表示 → 非表示にする：選択中のアイテムを [+] で隠す（文書に記録し、1 回の Undo で戻る）。
+  // 同じ親の子（隠れていないもの）がすべて選択中なら、子を隠す代わりに親を折り畳む。ルートは対象外
+  hideSelected() {
+    this.editor.end();
+    const ids = this.selectedIds();
+    if (ids.length === 0) return;
+    const selected = new Set(ids);
+    const collapse = [];
+    const hide = [];
+    const parents = new Set();
+    for (const id of ids) {
+      const parent = this.index.get(id).parent;
+      if (!parent || parents.has(parent.id)) continue;
+      parents.add(parent.id);
+      const visible = parent.children.filter((c) => !this.isHiddenItem(c));
+      if (visible.every((c) => selected.has(c.id))) collapse.push(parent.id);
+      else hide.push(...visible.filter((c) => selected.has(c.id)).map((c) => c.id));
+    }
+    if (collapse.length === 0 && hide.length === 0) return;
+    const itemId = collapse[0] || this.index.get(hide[0]).parent.id;
+    this.commit((doc) => {
+      for (const id of collapse) Model.locate(doc, id).item.collapsed = true;
+      for (const id of hide) Model.locate(doc, id).item.hidden = true;
+      return { itemId };
+    }, { itemId });
+    for (const id of ids) {
+      if (this.index.has(id) && this.index.get(id).parent) this.selection.delete(id);
+    }
+    this.mainArea.draw();
   }
 
   // 表示タブのフィルタを解除し、隠していたアイテムをすべて表示する（条件はタブに残す。折り畳み状態はそのまま）
@@ -528,7 +645,10 @@ class Application {
     const tabId = this.activeTabId;
     this.commit((doc) => {
       const tab = doc.tabs.find((t) => t.id === tabId);
-      if (tab.filter) tab.filter.active = false;
+      if (tab.filter) {
+        tab.filter.active = false;
+        delete tab.filter.hidden;
+      }
       return { tabId };
     }, { tabId });
   }

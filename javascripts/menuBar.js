@@ -20,7 +20,14 @@ class MenuBar {
           { label: '元に戻す', shortcut: 'Ctrl+Z', action: () => app.undo(), enabled: () => app.history.canUndo() },
           { label: 'やり直す', shortcut: 'Ctrl+Shift+Z', action: () => app.redo(), enabled: () => app.history.canRedo() },
           { separator: true },
-          { label: '全て選択', shortcut: 'Ctrl+A', action: () => app.selectAll() },
+          {
+            label: '選択',
+            submenu: () => [
+              { label: '全て選択', shortcut: 'Ctrl+A', action: () => app.selectAll() },
+              { label: '子を全て選択', action: () => app.selectDescendants(), enabled: () => app.selectedIds().length > 0 },
+              { label: '同階層を全て選択', action: () => app.selectSiblings(), enabled: () => app.selectedIds().length > 0 },
+            ],
+          },
           { label: 'コピー', shortcut: 'Ctrl+C', action: () => app.menuCopy(false), enabled: () => app.selectedIds().length > 0 },
           {
             label: '形式を指定してコピー',
@@ -49,7 +56,14 @@ class MenuBar {
               ];
             },
           },
-          { label: 'アイテムを削除', action: () => app.deleteSelected(), enabled: () => app.selectedIds().length > 0 },
+          {
+            label: 'アイテムを削除',
+            enabled: () => app.selectedIds().length > 0,
+            submenu: () => [
+              { label: '選択中のアイテムを削除', action: () => app.deleteSelected() },
+              { label: '選択中のアイテムの子も削除', action: () => app.deleteSelected(true) },
+            ],
+          },
           { separator: true },
           { label: 'ステータスを設定', submenu: () => app.statusMenuItems(), enabled: () => app.selectedIds().length > 0 },
           { label: 'ステータスを削除', action: () => app.clearStatus(), enabled: () => app.selectedHasStatus() },
@@ -63,6 +77,20 @@ class MenuBar {
         items: [
           { label: 'ツリーを全て開く', shortcut: ';', action: () => app.setTreeCollapsed(false) },
           { label: 'ツリーを全て閉じる', shortcut: '-', action: () => app.setTreeCollapsed(true) },
+          { separator: true },
+          { label: '非表示にする', action: () => app.hideSelected(), enabled: () => app.selectedIds().length > 0 },
+          { separator: true },
+          {
+            label: '並べ替え',
+            enabled: () => app.selectedIds().length > 0,
+            submenu: () => [
+              { label: 'ステータス順', action: () => app.sortSelected('status') },
+              { label: '登録順', action: () => app.sortSelected('created') },
+              { label: '更新順', action: () => app.sortSelected('updated') },
+              { label: '名前順', action: () => app.sortSelected('name') },
+              { label: '逆順', action: () => app.sortSelected('reverse') },
+            ],
+          },
         ],
       },
       {
@@ -76,11 +104,13 @@ class MenuBar {
     // アイテムの右クリックメニュー（項目は編集メニューと共通）
     const editItems = this.menus.find((m) => m.label === '編集').items;
     const pick = (label) => editItems.find((d) => d.label === label);
+    const hideItem = this.menus.find((m) => m.label === '表示').items.find((d) => d.label === '非表示にする');
     this.contextItems = [
       pick('コピー'), pick('切り取り'), pick('貼り付け'), { separator: true },
       pick('アイテムを追加'), pick('アイテムを削除'), { separator: true },
       pick('ステータスを設定'), pick('ステータスを削除'), { separator: true },
-      pick('フィルタを設定'), pick('フィルタを削除'),
+      pick('フィルタを設定'), pick('フィルタを削除'), { separator: true },
+      hideItem,
     ];
     // アイテム外の右クリックメニュー
     this.contextOutsideItems = [pick('フィルタを設定'), pick('フィルタを削除')];
@@ -152,7 +182,7 @@ class MenuBar {
     el.style.top = Math.max(0, Math.min(y, window.innerHeight - r.height - 4)) + 'px';
   }
 
-  // サブメニュー: def.submenu() の [{ label, badge?, action, enabled? }] を表示する（無効なら開かない）
+  // サブメニュー: def.submenu() の [{ label, badge?, shortcut?, action, enabled? }] を表示する（無効なら開かない）
   openSubmenu(menu, item, def) {
     if (this.submenu && this.submenu.item === item) return;
     this.closeSubmenu();
@@ -167,6 +197,7 @@ class MenuBar {
     for (const entry of entries) {
       const sub = Util.el('button', 'menu-item');
       sub.append(entry.badge || Util.el('span', 'menu-item-label', entry.label));
+      if (entry.shortcut) sub.append(Util.el('span', 'menu-item-shortcut', entry.shortcut));
       sub.disabled = entry.enabled ? !entry.enabled() : false;
       sub.addEventListener('click', () => {
         this.closeAll();

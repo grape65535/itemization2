@@ -6,14 +6,15 @@
 const TreeLayout = {
   // override: 文字入力中アイテムの { id, text, styles, fill, align }（未確定の内容で寸法を計算するため）
   // options: タブの設定（最大表示幅 maxWidth、親の縦位置 parentAlign）
-  // hidden: フィルタで隠すアイテムの ID の Set（連続する兄弟ごとに 1 つの [+]（隠れたアイテムの展開アイコン）にまとめる）
+  // hidden: フィルタで隠すアイテムの ID の Set。これと「非表示にする」で隠したアイテム（item.hidden）を、
+  //   連続する兄弟ごとに 1 つの [+]（隠れたアイテムの展開アイコン）にまとめる
   compute(root, measurer, override, options, hidden) {
     const C = Config;
     const maxWidth = (options && options.maxWidth) || C.maxContentWidth;
     const parentTop = !!options && options.parentAlign === 'top';
     const nodes = new Map();
     const order = []; // 可視アイテムの文書順
-    const placeholders = []; // フィルタで隠したアイテムの [+]（order・nodes には含めない）
+    const placeholders = []; // フィルタ・非表示で隠したアイテムの [+]（order・nodes には含めない）
     const maxWidthByDepth = [];
 
     const measure = (item, depth, parentId) => {
@@ -67,7 +68,7 @@ const TreeLayout = {
       if (!item.collapsed) {
         let group = null;
         for (const child of item.children) {
-          if (hidden && hidden.has(child.id)) {
+          if (child.hidden || (hidden && hidden.has(child.id))) {
             if (!group) {
               group = placeholder(depth + 1, item.id);
               node.children.push(group);
