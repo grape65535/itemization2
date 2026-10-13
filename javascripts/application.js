@@ -363,20 +363,26 @@ class Application {
 
   // ---- ツリーを全て開く／閉じる ----
 
-  // 選択アイテム（無ければルート）とその全ての子孫を開く／閉じる。子のあるアイテムだけを対象にする
+  // 選択アイテム（無ければルート）とその全ての子孫を開く／閉じる。子のあるアイテムだけを対象にする。
+  // 開く時は、子孫のうちフィルタ・非表示の [+] で隠したアイテムも表示する（フィルタの分は表示状態のみ・Undo 対象外）
   setTreeCollapsed(collapsed) {
     this.editor.end();
     const ids = this.selectedIds();
     const targets = ids.length ? ids : [this.activeTab.root.id];
-    this.commit((doc) => {
+    const filter = this.activeFilter;
+    const changed = this.commit((doc) => {
       const walk = (item) => {
         if (item.children.length > 0) item.collapsed = collapsed;
-        if (!collapsed) delete item.hidden; // 開く時は「非表示にする」で隠した子孫も表示する
+        if (!collapsed) {
+          delete item.hidden;
+          if (filter) filter.hidden.delete(item.id);
+        }
         item.children.forEach(walk);
       };
       for (const id of targets) walk(Model.locate(doc, id).item);
       return { itemId: targets[0] };
     }, { itemId: targets[0] });
+    if (!changed && !collapsed) this.mainArea.render(); // フィルタの [+] だけを開いた時
   }
 
   // ---- ステータス ----
