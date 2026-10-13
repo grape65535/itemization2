@@ -72,6 +72,18 @@ class MenuBar {
           { label: 'ツリーを全て閉じる', shortcut: '-', action: () => app.setTreeCollapsed(true) },
           { separator: true },
           { label: '非表示にする', action: () => app.hideSelected(), enabled: () => app.selectedIds().length > 0 },
+          { separator: true },
+          {
+            label: '並べ替え',
+            enabled: () => app.selectedIds().length > 0,
+            submenu: () => [
+              { label: 'ステータス順', action: () => app.sortSelected('status') },
+              { label: '登録順', action: () => app.sortSelected('created') },
+              { label: '更新順', action: () => app.sortSelected('updated') },
+              { label: '名前順', action: () => app.sortSelected('name') },
+              { label: '逆順', action: () => app.sortSelected('reverse') },
+            ],
+          },
         ],
       },
       {

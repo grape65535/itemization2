@@ -6,13 +6,25 @@
 //   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active, hidden? }
 //              （フィルタの条件と、フィルタ中か。hidden はフィルタ中に [+] で隠しているアイテムの ID（フィルタ後の開閉状態））
 //   TabOptions = { parentAlign: 'center'|'top', followScroll, maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
-//   Item     = { id, text, collapsed, children: [Item], spans?, fill?, align?, status?, hidden? }
+//   Item     = { id, text, collapsed, children: [Item], created, updated, spans?, fill?, align?, status?, hidden? }
+//              （created・updated は登録日時・更新日時の ISO 8601 文字列（UTC）。更新日時は文字列・ステータスの変更時に更新する）
 //              （装飾は richText.js を参照、status はステータス名、hidden は「非表示にする」で [+] に隠したか（true のみ記録。ルートには付けない））
 const Model = {
   FORMAT: 1,
 
   createItem(text = '') {
-    return { id: Util.newId(), text, collapsed: false, children: [] };
+    const now = Model.now();
+    return { id: Util.newId(), text, collapsed: false, children: [], created: now, updated: now };
+  },
+
+  // 登録日時・更新日時に記録する現在日時
+  now() {
+    return new Date().toISOString();
+  },
+
+  // 日時の文字列として正しければそのまま、でなければ null
+  validTime(value) {
+    return typeof value === 'string' && !Number.isNaN(Date.parse(value)) ? value : null;
   },
 
   createTab() {
@@ -179,6 +191,11 @@ const Model = {
         collapsed: !!item.collapsed,
         children: Array.isArray(item.children) ? item.children.map(fixItem) : [],
       }, item), item.status);
+      // 日時の無い（旧形式の）アイテムは、もう一方の日時か読み込んだ日時で補う
+      const created = Model.validTime(item.created);
+      const updated = Model.validTime(item.updated);
+      fixed.created = created || updated || Model.now();
+      fixed.updated = updated || fixed.created;
       if (item.hidden === true) fixed.hidden = true;
       return fixed;
     };

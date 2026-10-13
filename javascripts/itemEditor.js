@@ -119,6 +119,7 @@ class ItemEditor {
     const decoration = { spans, fill: this.fill, align: this.align };
     this.app.commit((doc) => {
       const target = Model.locate(doc, id).item;
+      if (target.text !== text) target.updated = Model.now(); // 装飾だけの変更では更新日時を変えない
       target.text = text;
       RichText.assignDecoration(target, decoration);
     }, { itemId: id });

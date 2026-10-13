@@ -3,7 +3,9 @@
 // アプリ全体の状態（文書・アクティブタブ・選択・履歴）と画面部品の統括
 class Application {
   constructor(rootEl) {
-    this.doc = Storage.loadDocument() || Model.createDocument();
+    const loaded = Storage.loadDocument();
+    this.doc = loaded || Model.createDocument();
+    if (loaded) Storage.saveDocument(JSON.stringify(this.doc)); // 読み込み時に補った値（旧形式のアイテムの日時など）を保存する
     this.filters = new Map(); // タブ ID -> フィルタ中の表示 { hidden: [+] で隠すアイテムの ID の Set }（文書の tab.filter.hidden から作る）
     // フィルタ後の開閉状態が記録されていない（旧形式の）フィルタ中のタブは、記録した条件でフィルタをかけた状態から始める
     if (this.refilterTabs(this.doc.tabs, true)) Storage.saveDocument(JSON.stringify(this.doc));
@@ -405,9 +407,64 @@ class Application {
     const ids = this.selectedIds();
     if (ids.length === 0) return;
     this.commit((doc) => {
-      for (const id of ids) Model.assignStatus(Model.locate(doc, id).item, name);
+      for (const id of ids) {
+        const item = Model.locate(doc, id).item;
+        const before = item.status;
+        Model.assignStatus(item, name);
+        if (item.status !== before) item.updated = Model.now();
+      }
       return { itemId: ids[0] };
     }, { itemId: ids[0] });
+  }
+
+  // ---- 並べ替え ----
+
+  // 選択中のアイテムを、親ごとに同階層の中で並べ替える（1 回の Undo で戻る）。
+  // 同じ親の選択アイテムが連続していなければ、最も兄のアイテムの位置から連続させて並べる。
+  // mode: 'status'（タブの設定のステータス順）/ 'created'（登録順）/ 'updated'（更新順）/ 'name'（名前順）/ 'reverse'（逆順）
+  sortSelected(mode) {
+    this.editor.end();
+    const ids = this.selectedIds();
+    if (ids.length === 0) return;
+    const groups = new Map(); // 親の ID -> 選択中の子の ID（文書順）
+    for (const id of ids) {
+      const parent = this.index.get(id).parent;
+      if (!parent) continue; // ルートは並べ替えない
+      if (!groups.has(parent.id)) groups.set(parent.id, []);
+      groups.get(parent.id).push(id);
+    }
+    if (groups.size === 0) return;
+    const tabId = this.activeTabId;
+    this.commit((doc) => {
+      const tab = doc.tabs.find((t) => t.id === tabId);
+      const compare = Application.sortComparator(mode, tab.options);
+      for (const [parentId, childIds] of groups) {
+        const parent = Model.locate(doc, parentId).item;
+        const picked = new Set(childIds);
+        const start = parent.children.findIndex((c) => picked.has(c.id));
+        const items = parent.children.filter((c) => picked.has(c.id));
+        const rest = parent.children.filter((c) => !picked.has(c.id));
+        // 安定ソート（同じ値なら元の順序を保つ）
+        const sorted = mode === 'reverse' ? items.reverse()
+          : items.map((item, i) => ({ item, i })).sort((a, b) => compare(a.item, b.item) || a.i - b.i).map((e) => e.item);
+        rest.splice(start, 0, ...sorted);
+        parent.children = rest;
+      }
+      return { itemId: ids[0] };
+    }, { itemId: ids[0] });
+  }
+
+  // 並べ替えの比較関数（reverse 以外）
+  static sortComparator(mode, options) {
+    if (mode === 'status') {
+      // 登録順のステータス → 未登録のステータス → ステータス無し
+      const names = options.statuses.map((s) => s.name);
+      const rank = (item) => (!item.status ? names.length + 1 : names.includes(item.status) ? names.indexOf(item.status) : names.length);
+      return (a, b) => rank(a) - rank(b);
+    }
+    if (mode === 'created' || mode === 'updated') return (a, b) => Date.parse(a[mode]) - Date.parse(b[mode]);
+    const collator = new Intl.Collator('ja', { numeric: true });
+    return (a, b) => collator.compare(a.text, b.text);
   }
 
   clearStatus() {
