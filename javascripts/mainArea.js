@@ -373,11 +373,22 @@ class MainArea {
         this.updateMarquee();
         this.draw();
         break;
-      case 'text':
+      case 'text': {
         if (this.editor.editingId !== d.id) break;
+        // アイテムの枠外へ一定距離以上離れたら、入力を確定してアイテムのドラッグ移動に切り替える（ルートは移動できないので範囲選択のまま）
+        const p = this.toContent(e);
+        const n = this.layout.nodes.get(d.id);
+        const out = Config.textDragOutDistance;
+        if (this.app.index.get(d.id).parent && (p.x < n.x - out || p.x > n.x + n.w + out || p.y < n.y - out || p.y > n.y + n.h + out)) {
+          this.editor.end();
+          this.drag = { type: 'pending', id: d.id, start: p };
+          this.beginItemDrag(e);
+          break;
+        }
         this.autoScroll(e);
-        this.editor.setSelection(d.anchor, this.caretAt(d.id, this.toContent(e)));
+        this.editor.setSelection(d.anchor, this.caretAt(d.id, p));
         break;
+      }
     }
   }
 
