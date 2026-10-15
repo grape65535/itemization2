@@ -1,6 +1,7 @@
 html, body {
   margin: 0;
   height: 100%;
+  overscroll-behavior-x: none; /* スワイプでの「戻る」を抑止 */
 }
 
 body {
