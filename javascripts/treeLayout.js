@@ -2,16 +2,17 @@
 
 // アイテムツリーの配置計算。
 // ルートを左上に置き、左→右（階層）、上→下（兄弟）へ広げる。
-// 同じ階層のアイテムは左端を揃え、親は可視の子群（最初の子と最後の子の縦中央の中間）に縦中央を合わせる（タブの設定で上寄せも可）。
+// 同じ階層のアイテムは左端を揃え（タブの設定で親との距離を最短にする「左に詰める」も可）、親は可視の子群（最初の子と最後の子の縦中央の中間）に縦中央を合わせる（タブの設定で上寄せも可）。
 const TreeLayout = {
   // override: 文字入力中アイテムの { id, text, styles, fill, align }（未確定の内容で寸法を計算するため）
-  // options: タブの設定（最大表示幅 maxWidth、親の縦位置 parentAlign）
+  // options: タブの設定（最大表示幅 maxWidth、横位置 horizontalAlign、親の縦位置 parentAlign）
   // hidden: フィルタで隠すアイテムの ID の Set。これと「非表示にする」で隠したアイテム（item.hidden）を、
   //   連続する兄弟ごとに 1 つの [+]（隠れたアイテムの展開アイコン）にまとめる
   compute(root, measurer, override, options, hidden) {
     const C = Config;
     const maxWidth = (options && options.maxWidth) || C.maxContentWidth;
     const parentTop = !!options && options.parentAlign === 'top';
+    const compact = !!options && options.horizontalAlign === 'compact';
     const nodes = new Map();
     const order = []; // 可視アイテムの文書順
     const placeholders = []; // フィルタ・非表示で隠したアイテムの [+]（order・nodes には含めない）
@@ -97,8 +98,9 @@ const TreeLayout = {
     }
 
     // 部分木内での相対位置を求める
-    const place = (node) => {
-      node.x = columnX[node.depth];
+    // 横位置: 階層を揃える＝階層ごとの左端、左に詰める＝親の右端＋間隔
+    const place = (node, parent) => {
+      node.x = compact && parent ? parent.x + parent.w + C.horizontalGap : columnX[node.depth];
       if (node.children.length === 0) {
         node.relTop = 0;
         node.childShift = 0;
@@ -107,7 +109,7 @@ const TreeLayout = {
       }
       let y = 0;
       for (const child of node.children) {
-        place(child);
+        place(child, node);
         child.subtreeTop = y;
         y += child.subtreeHeight + C.verticalGap;
       }

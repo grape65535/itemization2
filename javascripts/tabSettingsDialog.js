@@ -40,6 +40,16 @@ class TabSettingsDialog {
     title.append(Util.el('span', '', 'タブの設定'), Util.el('span', 'modal-subtitle', app.tabTitle(tab)));
     const body = Util.el('div', 'modal-body');
 
+    // アイテムの横表示位置
+    const horizontalSelect = Util.el('select', 'settings-select');
+    for (const [value, label] of [['depth', '階層を揃える'], ['compact', '左に詰める']]) {
+      const option = Util.el('option', '', label);
+      option.value = value;
+      horizontalSelect.append(option);
+    }
+    horizontalSelect.value = options.horizontalAlign;
+    body.append(this.field('アイテムの横表示位置', horizontalSelect));
+
     // 親アイテムの縦表示位置
     const alignSelect = Util.el('select', 'settings-select');
     for (const [value, label] of [['center', '中央寄せ'], ['top', '上寄せ']]) {
@@ -99,7 +109,7 @@ class TabSettingsDialog {
     const ok = Util.el('button', 'settings-button primary', 'OK');
     ok.type = 'button';
     cancel.addEventListener('click', () => this.close());
-    ok.addEventListener('click', () => this.submit(alignSelect.value, followInput.checked, Number(widthInput.value)));
+    ok.addEventListener('click', () => this.submit(horizontalSelect.value, alignSelect.value, followInput.checked, Number(widthInput.value)));
     footer.append(cancel, ok);
 
     dialog.append(title, body, footer);
@@ -114,7 +124,7 @@ class TabSettingsDialog {
     });
     for (const type of ['copy', 'cut', 'paste']) this.overlay.addEventListener(type, (e) => e.stopPropagation());
     document.body.append(this.overlay);
-    alignSelect.focus();
+    horizontalSelect.focus();
   }
 
   field(label, control) {
@@ -201,7 +211,7 @@ class TabSettingsDialog {
   }
 
   // 入力を検証して反映する（ステータス名は前後の空白を除いて 1〜12 文字で、重複しないこと）
-  submit(parentAlign, followScroll, maxWidth) {
+  submit(horizontalAlign, parentAlign, followScroll, maxWidth) {
     const statuses = [];
     const renames = new Map(); // 元の名前 -> 新しい名前
     const seen = new Set();
@@ -230,7 +240,7 @@ class TabSettingsDialog {
       return;
     }
     const tabId = this.tabId;
-    const options = Model.normalizeOptions({ parentAlign, followScroll, maxWidth, statuses });
+    const options = Model.normalizeOptions({ horizontalAlign, parentAlign, followScroll, maxWidth, statuses });
     this.close();
     this.app.commit((doc) => {
       const tab = doc.tabs.find((t) => t.id === tabId);
