@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.2.27',
+  version: 'v2.2.28',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',
@@ -87,6 +87,7 @@ const Config = {
   statusHeight: 15,
   statusPaddingX: 6,
   statusGap: 3, // バッジと文字列の間隔
+  statusMenuGap: 4, // バッジのクリックで開くステータス選択のメニューとバッジの間隔
   // タブの設定から削除されたステータス（白背景・灰色の文字・黒の点線枠）
   statusOrphan: { bg: '#ffffff', fg: '#808080', border: '#000000' },
   defaultStatuses: [
