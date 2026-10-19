@@ -139,7 +139,7 @@ class MenuBar {
     this.openMenu = menu;
     menu.dropdown.textContent = '';
     if (menu.items.length === 0) {
-      const item = Util.el('button', 'menu-item', '（項目なし）');
+      const item = Util.el('button', 'menu-item', menu.emptyLabel || '（項目なし）');
       item.disabled = true;
       menu.dropdown.append(item);
     }
@@ -149,7 +149,7 @@ class MenuBar {
         continue;
       }
       const item = Util.el('button', 'menu-item');
-      item.append(Util.el('span', 'menu-item-label', def.label), Util.el('span', 'menu-item-shortcut', def.submenu ? '▶︎' : def.shortcut || ''));
+      item.append(def.badge || Util.el('span', 'menu-item-label', def.label), Util.el('span', 'menu-item-shortcut', def.submenu ? '▶︎' : def.shortcut || ''));
       item.disabled = def.enabled ? !def.enabled() : false;
       if (def.submenu) {
         // マウスを置くとサブメニューを右に開く
@@ -180,6 +180,21 @@ class MenuBar {
     const r = dropdown.getBoundingClientRect();
     el.style.left = Math.max(0, Math.min(x, window.innerWidth - r.width - 4)) + 'px';
     el.style.top = Math.max(0, Math.min(y, window.innerHeight - r.height - 4)) + 'px';
+  }
+
+  // ステータスのバッジのクリックで開くステータス選択のメニュー。画面座標 (x, centerY) を左端・縦中央にして開く（はみ出す場合は内側へずらす）。
+  // 項目は「ステータスを設定」のサブメニューと同じ
+  openStatusMenu(x, centerY) {
+    this.closeAll();
+    const el = Util.el('div', 'menu context-menu');
+    const dropdown = Util.el('div', 'menu-dropdown menu-status-popup');
+    el.append(dropdown);
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+    document.body.append(el);
+    this.open({ el, dropdown, items: this.app.statusMenuItems(), context: true, emptyLabel: '（ステータスが登録されていません）' });
+    const r = dropdown.getBoundingClientRect();
+    el.style.left = Math.max(0, Math.min(x, window.innerWidth - r.width - 4)) + 'px';
+    el.style.top = Math.max(0, Math.min(centerY - r.height / 2, window.innerHeight - r.height - 4)) + 'px';
   }
 
   // サブメニュー: def.submenu() の [{ label, badge?, shortcut?, action, enabled? }] を表示する（無効なら開かない）

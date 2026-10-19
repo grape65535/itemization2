@@ -212,14 +212,23 @@ class MainArea {
         const t = TreeLayout.toggleRect(n);
         if (p.x >= t.x - 2 && p.x <= t.x + t.w + 2 && p.y >= t.y - 2 && p.y <= t.y + t.h + 2) return { type: 'toggle', id: n.id };
       }
-      // 枠線（1px）とその両側 b px を「枠」とみなす。ステータスのバッジの行（文字列より上）も枠と同じ扱い
+      // 枠線（1px）とその両側 b px を「枠」とみなす。ステータスのバッジの行（文字列より上）も枠と同じ扱い（バッジ自体は 'status'）
       if (p.x >= n.x - b && p.x < n.x + n.w + b && p.y >= n.y - b && p.y < n.y + n.h + b) {
+        if (n.status) {
+          const s = this.statusRect(n);
+          if (p.x >= s.x && p.x < s.x + s.w && p.y >= s.y && p.y < s.y + s.h) return { type: 'item', id: n.id, part: 'status' };
+        }
         const top = n.status ? Math.max(n.y + 1 + b, n.y + Config.paddingY + n.lines[0].top) : n.y + 1 + b;
         const inner = p.x >= n.x + 1 + b && p.x < n.x + n.w - 1 - b && p.y >= top && p.y < n.y + n.h - 1 - b;
         return { type: 'item', id: n.id, part: inner ? 'inner' : 'border' };
       }
     }
     return null;
+  }
+
+  // ステータスのバッジの矩形（コンテンツ座標）
+  statusRect(node) {
+    return { x: node.x + Config.paddingX, y: node.y + Config.paddingY, w: node.status.w, h: node.status.h };
   }
 
   caretAt(id, p) {
@@ -246,7 +255,7 @@ class MainArea {
     if (this.drag) return;
     const p = this.layout && this.toContent(e);
     const hit = this.layout && this.hitTest(p);
-    this.scroller.style.cursor = !hit ? 'default' : hit.type === 'toggle' || hit.type === 'placeholder' || this.linkAt(hit, p) ? 'pointer'
+    this.scroller.style.cursor = !hit ? 'default' : hit.type === 'toggle' || hit.type === 'placeholder' || hit.part === 'status' || this.linkAt(hit, p) ? 'pointer'
       : hit.part === 'inner' ? 'text' : 'default';
   }
 
@@ -400,6 +409,10 @@ class MainArea {
     const sel = this.app.selection;
     switch (d.type) {
       case 'pending':
+        if (d.part === 'status') {
+          this.openStatusMenu(d.id);
+          break;
+        }
         sel.clear();
         sel.add(d.id);
         if (d.link) {
@@ -420,6 +433,24 @@ class MainArea {
         this.draw();
         break;
     }
+  }
+
+  // ステータスのバッジのクリック（ドラッグしなかった時）：右クリックと同様に未選択ならそのアイテムのみを選択し（選択中なら選択を保つ）、
+  // バッジの右隣・縦中央揃えでステータス選択のメニューを開く。選んだステータスは選択中のアイテム全体に設定する
+  openStatusMenu(id) {
+    const sel = this.app.selection;
+    if (!sel.has(id)) {
+      sel.clear();
+      sel.add(id);
+    }
+    this.draw();
+    const node = this.layout.nodes.get(id);
+    if (!node || !node.status) return;
+    const s = this.statusRect(node);
+    const r = this.scroller.getBoundingClientRect();
+    const x = r.left + s.x + s.w - this.scroller.scrollLeft + Config.statusMenuGap;
+    const centerY = r.top + s.y + s.h / 2 - this.scroller.scrollTop;
+    this.app.menuBar.openStatusMenu(x, centerY);
   }
 
   beginItemDrag(e) {
