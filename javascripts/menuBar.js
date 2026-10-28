@@ -59,8 +59,8 @@ class MenuBar {
           {
             label: 'アイテムを削除',
             enabled: () => app.selectedIds().length > 0,
-            // 選択中のアイテムに子が無ければサブメニューを出さず、選択した時点で削除する
-            submenuIf: () => app.selectedHasChildren(),
+            // 選択中のアイテムに子が無いか、子孫がすべて選択中ならサブメニューを出さず、選択した時点で削除する
+            submenuIf: () => app.selectedHasUnselectedDescendants(),
             action: () => app.deleteSelected(),
             submenu: () => [
               { label: '選択中のアイテムを削除', action: () => app.deleteSelected() },

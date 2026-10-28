@@ -406,9 +406,12 @@ class Application {
     }));
   }
 
-  // 選択中のアイテムのいずれかに子があるか（フィルタ・非表示で隠れた子を含む）
-  selectedHasChildren() {
-    return this.selectedIds().some((id) => this.index.get(id).item.children.length > 0);
+  // 選択中のアイテムのいずれかに、選択されていない子孫があるか（フィルタ・非表示で隠れた子孫は選択されていないものとみなす）
+  selectedHasUnselectedDescendants() {
+    const ids = this.selectedIds();
+    const selected = new Set(ids);
+    const unselected = (item) => item.children.some((child) => !selected.has(child.id) || unselected(child));
+    return ids.some((id) => unselected(this.index.get(id).item));
   }
 
   selectedHasStatus() {
