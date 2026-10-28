@@ -1,7 +1,7 @@
 'use strict';
 
 // 保存データ（JSON）のツリー操作
-//   Document = { format, tabs: [Tab] }
+//   Document = { format, tabs: [Tab], shortcuts? }（shortcuts はショートカットキーの割り当て { 操作の ID: Combo }。shortcut.js を参照）
 //   Tab      = { id, name?, root: Item, options: TabOptions, filter?: TabFilter }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
 //   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active, hidden? }
 //              （フィルタの条件と、フィルタ中か。hidden はフィルタ中に [+] で隠しているアイテムの ID（フィルタ後の開閉状態））
@@ -217,7 +217,7 @@ const Model = {
       if (item.hidden === true) fixed.hidden = true;
       return fixed;
     };
-    return {
+    const doc = {
       format: Model.FORMAT,
       tabs: raw.tabs.map((tab) => {
         const fixed = { id: uniqueId(tab && tab.id), root: fixItem(tab && tab.root) };
@@ -233,6 +233,9 @@ const Model = {
         return fixed;
       }),
     };
+    const shortcuts = Shortcut.normalize(raw.shortcuts);
+    if (shortcuts) doc.shortcuts = shortcuts;
+    return doc;
   },
 
   // タブとその全アイテムに新しい ID を振る（外部ファイルから追加する時に既存の ID と重ならないように）

@@ -867,3 +867,117 @@ body.busy * {
   padding-top: 6px;
   border-top: 1px dashed #dde2e8;
 }
+
+/* ---- ショートカットキーの設定 ---- */
+.modal-dialog.shortcut-dialog {
+  width: 820px;
+  height: 80vh;
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 190px 64px;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 8px;
+  border-bottom: 1px solid #eef0f3;
+  user-select: none;
+}
+
+.shortcut-list .shortcut-row:not(.fixed) {
+  cursor: pointer;
+}
+
+.shortcut-list .shortcut-row:not(.fixed):hover {
+  background: #f2f6fd;
+}
+
+.shortcut-header {
+  position: sticky;
+  top: -16px;
+  z-index: 1;
+  min-height: 28px;
+  border-bottom-color: #dde2e8;
+  background: #fff;
+  color: #6b7480;
+  font-size: 12px;
+}
+
+.shortcut-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut-row.fixed .shortcut-name,
+.shortcut-key.builtin {
+  color: #8a929c;
+}
+
+.shortcut-key {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.shortcut-key.duplicate {
+  color: #d9534f;
+  font-weight: bold;
+}
+
+.shortcut-set {
+  height: 24px;
+  padding: 0 12px;
+}
+
+.shortcut-footer-right {
+  align-items: center;
+}
+
+.shortcut-footer-right .settings-error {
+  min-height: 0;
+}
+
+/* ショートカットキーの割り当て（ショートカットキーの設定に重ねる） */
+.modal-overlay.shortcut-key-overlay {
+  z-index: 110;
+}
+
+.modal-dialog.shortcut-key-dialog {
+  width: 440px;
+  outline: none;
+}
+
+.shortcut-key-target {
+  overflow: hidden;
+  margin-bottom: 14px;
+  color: #6b7480;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shortcut-modifiers {
+  display: flex;
+  gap: 24px;
+  margin-bottom: 14px;
+}
+
+.shortcut-key-label {
+  padding: 12px;
+  border: 1px solid #b8c0ca;
+  border-radius: 4px;
+  background: #f7f9fb;
+  font-size: 18px;
+  font-weight: bold;
+  text-align: center;
+}
+
+.shortcut-key-label.empty {
+  color: #8a929c;
+  font-size: 14px;
+  font-weight: normal;
+}
+
+.shortcut-key-message {
+  margin-top: 8px;
+}

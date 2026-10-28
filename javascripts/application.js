@@ -29,6 +29,7 @@ class Application {
     this.mainArea = new MainArea(this, main);
     this.tabSettings = new TabSettingsDialog(this);
     this.filterDialog = new FilterDialog(this);
+    this.shortcutSettings = new ShortcutSettingsDialog(this);
     this.filterCondition = null; // 最後に適用したフィルタの条件 { text, ignoreCase, regex }（タブに条件が無い時のダイアログの初期値）
 
     // ファイルを開く（OS 標準のダイアログ）・画面へのドロップ
@@ -319,19 +320,22 @@ class Application {
   // JSON / SVG（metadata の JSON）を読み込み、常に新しいタブとして末尾に追加する
   async openFiles(files) {
     for (const file of files) {
-      let tabs = null;
+      let parsed = null;
       try {
-        tabs = FileExport.parseFile(await file.text());
+        parsed = FileExport.parseFile(await file.text());
       } catch (e) {
-        tabs = null;
+        parsed = null;
       }
-      if (!tabs || tabs.length === 0) {
+      if (!parsed || parsed.tabs.length === 0) {
         alert('アプリケーションで開ける形式ではありませんでした');
         continue;
       }
+      const tabs = parsed.tabs;
       this.finishInput();
       this.commit((doc) => {
         doc.tabs.push(...tabs);
+        // ファイルにショートカットキーの割り当てがあれば、それに置き換える
+        if (parsed.shortcuts) doc.shortcuts = parsed.shortcuts;
         this.setActiveTab(tabs[tabs.length - 1].id);
         return { tabId: this.activeTabId };
       });
@@ -342,14 +346,14 @@ class Application {
   saveJson() {
     this.finishInput();
     const tab = this.activeTab;
-    FileExport.download(new Blob([FileExport.tabJson(tab)], { type: 'application/json' }), FileExport.fileName(this.tabTitle(tab), '.json'));
+    FileExport.download(new Blob([FileExport.tabJson(tab, this.doc.shortcuts)], { type: 'application/json' }), FileExport.fileName(this.tabTitle(tab), '.json'));
   }
 
   // 表示タブを SVG 画像で保存する（metadata に「名前をつけて保存」と同じ JSON を埋め込む）
   saveSvg() {
     this.finishInput();
     const tab = this.activeTab;
-    const svg = FileExport.buildSvg(this.mainArea.exportScene(), FileExport.tabJson(tab));
+    const svg = FileExport.buildSvg(this.mainArea.exportScene(), FileExport.tabJson(tab, this.doc.shortcuts));
     FileExport.download(new Blob([svg], { type: 'image/svg+xml' }), FileExport.fileName(this.tabTitle(tab), '.svg'));
   }
 
@@ -551,7 +555,7 @@ class Application {
 
   // モーダルダイアログを表示中か
   get modalOpen() {
-    return this.tabSettings.isOpen || this.filterDialog.isOpen;
+    return this.tabSettings.isOpen || this.filterDialog.isOpen || this.shortcutSettings.isOpen;
   }
 
   // ---- フィルタ ----
@@ -771,6 +775,36 @@ class Application {
     this.mainArea.scrollIntoView(firstId);
   }
 
+  // ---- ショートカットキー ----
+
+  // ショートカットキーの割り当てを変える（ショートカットキーの設定の OK）。1 回の Undo で戻る
+  setShortcuts(shortcuts) {
+    this.commit((doc) => {
+      const normalized = Shortcut.normalize(shortcuts);
+      if (normalized) doc.shortcuts = normalized;
+      else delete doc.shortcuts;
+    });
+  }
+
+  // 割り当てたショートカットキーの操作を実行する。実行した（キーを処理した）ら true。
+  // 文字入力中（アイテムの文字入力）は CTRL・ALT を含むものだけ有効にし、入力を確定してから実行する。他の入力欄では無効
+  runShortcut(e) {
+    const shortcuts = this.doc.shortcuts;
+    if (!shortcuts || e.isComposing) return false;
+    const combo = Shortcut.fromEvent(e);
+    if (!combo) return false;
+    const editing = e.target === this.editor.ta;
+    if (Util.isTextInput(e.target) && !(editing && (combo.ctrl || combo.alt))) return false;
+    const id = Object.keys(shortcuts).find((k) => Shortcut.equals(shortcuts[k], combo));
+    const op = id && this.menuBar.operations().find((o) => o.id === id);
+    if (!op) return false;
+    e.preventDefault();
+    this.menuBar.closeAll();
+    this.editor.end();
+    if (op.enabled()) op.action();
+    return true;
+  }
+
   // ---- キー操作（文字入力中以外） ----
 
   onKeyDown(e) {
@@ -779,6 +813,7 @@ class Application {
       if (e.key === 'Escape') {
         this.tabSettings.close();
         this.filterDialog.close();
+        this.shortcutSettings.close();
       }
       return;
     }
@@ -795,6 +830,7 @@ class Application {
         return;
       }
     }
+    if (this.runShortcut(e)) return;
     if (Util.isTextInput(e.target) || e.isComposing) return;
     const ctrl = e.ctrlKey || e.metaKey;
     const key = e.key.toLowerCase();

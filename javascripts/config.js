@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.2.31',
+  version: 'v2.2.32',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',
@@ -42,6 +42,9 @@ const Config = {
   dragThreshold: 4,
   // 文字入力中のアイテム内からの範囲選択のドラッグを、アイテム移動に切り替える枠外への距離(px)
   textDragOutDistance: 10,
+
+  // 固定のショートカットキー（ショートカットキーの設定で割り当てられない）
+  fixedShortcuts: ['Ctrl+A', 'Ctrl+F', 'Ctrl+Z', 'Ctrl+Shift+Z', 'Ctrl+X', 'Ctrl+C', 'Ctrl+V', 'Ctrl+S', 'Ctrl+O'],
 
   // タブ名の最大文字数
   tabTitleMaxLength: 12,

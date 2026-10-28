@@ -32,6 +32,7 @@ stylesheets/app.css        全スタイル
 javascripts/               （index.html での読み込み順）
   config.js                定数（アプリ名・バージョン・寸法・フォント・localStorage キー）
   util.js                  ID 生成・DOM 生成などの小物
+  shortcut.js              ショートカットキーの組み合わせ（キーイベントからの変換・表示・固定キーの判定・保存データの検証）
   richText.js              文字の装飾（スタイルの正規化・文字ごとの配列と保存形式の変換・差分）
   model.js                 文書 JSON のツリー操作（生成・検証・索引・削除＋子の繰り上げ）
   history.js               全タブ共通の Undo/Redo 履歴（変更前後の JSON を保持）
@@ -47,6 +48,7 @@ javascripts/               （index.html での読み込み順）
   tabBar.js                タブバー（切替・追加・削除・並べ替え）
   menuBar.js               ヘッダのメニュー
   tabSettingsDialog.js     オプション → タブの設定のモーダルダイアログ（ステータスのバッジ表示 badge() も持つ）
+  shortcutDialog.js        オプション → ショートカットキーの設定のモーダルダイアログ（操作の一覧）と、重ねて開く割り当てダイアログ。実行は Application.runShortcut
   filterDialog.js          編集 → フィルタを設定のモーダルダイアログ（検索文字列・大文字小文字を区別しない・正規表現）と条件の判定。適用は Application.applyFilter
   backNavigationGuard.js   ブラウザの「戻る」・再読み込みによる画面遷移の抑止（履歴のダミー・popstate・マウス/キー・beforeunload など）
   application.js           全体の状態（文書・アクティブタブ・選択・履歴）と変更操作 commit()
@@ -67,6 +69,7 @@ javascripts/               （index.html での読み込み順）
   隠れたアイテム（フィルタ・非表示）は `Application.isHidden()`（祖先も見る）・`isHiddenItem()`（自身のみ）で判定し、選択・コピー等の対象から除く。
 - 「スクロールに追従する」は `MainArea.followScroll()` が配置どおりの `node.baseY` から `node.y` を書き換える（描画・ヒットテスト・文字入力は node.y を使うので追従する）。
   SVG/PDF は `MainArea.exportScene()` で baseY の位置から作る。
+- ショートカットキーを割り当てる操作はメニューの項目の `id`（menuBar.js）で識別し、`MenuBar.operations()` が一覧を作る。メニューに項目を追加したら `id` も付けること（保存データのキーになるので既存の id は変えない）。
 - バージョンを上げる時は `config.js` の `version` と `index.html` の `?v=` をすべて更新する。
 - `file://` で動かすため fetch/XHR でローカルファイルを読まない。追加のリソースは `<script>` で読み込む（例: `vendor/ipafont/ipag-font.js`）。
 - `vendor/ipafont/ipag-font.js`（約 5.7MB）は巨大なので Read/Grep の対象にしない。
