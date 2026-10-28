@@ -406,6 +406,11 @@ class Application {
     }));
   }
 
+  // 選択中のアイテムのいずれかに子があるか（フィルタ・非表示で隠れた子を含む）
+  selectedHasChildren() {
+    return this.selectedIds().some((id) => this.index.get(id).item.children.length > 0);
+  }
+
   selectedHasStatus() {
     return this.selectedIds().some((id) => !!this.index.get(id).item.status);
   }

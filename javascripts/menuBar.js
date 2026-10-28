@@ -59,6 +59,9 @@ class MenuBar {
           {
             label: 'アイテムを削除',
             enabled: () => app.selectedIds().length > 0,
+            // 選択中のアイテムに子が無ければサブメニューを出さず、選択した時点で削除する
+            submenuIf: () => app.selectedHasChildren(),
+            action: () => app.deleteSelected(),
             submenu: () => [
               { label: '選択中のアイテムを削除', action: () => app.deleteSelected() },
               { label: '選択中のアイテムの子も削除', action: () => app.deleteSelected(true) },
@@ -148,10 +151,12 @@ class MenuBar {
         menu.dropdown.append(Util.el('div', 'menu-separator'));
         continue;
       }
+      // submenuIf() が偽なら、サブメニューを持たない項目として action を実行する
+      const hasSubmenu = !!def.submenu && (!def.submenuIf || def.submenuIf());
       const item = Util.el('button', 'menu-item');
-      item.append(def.badge || Util.el('span', 'menu-item-label', def.label), Util.el('span', 'menu-item-shortcut', def.submenu ? '▶︎' : def.shortcut || ''));
+      item.append(def.badge || Util.el('span', 'menu-item-label', def.label), Util.el('span', 'menu-item-shortcut', hasSubmenu ? '▶︎' : def.shortcut || ''));
       item.disabled = def.enabled ? !def.enabled() : false;
-      if (def.submenu) {
+      if (hasSubmenu) {
         // マウスを置くとサブメニューを右に開く
         item.classList.add('has-submenu');
         item.addEventListener('mouseenter', () => this.openSubmenu(menu, item, def));
