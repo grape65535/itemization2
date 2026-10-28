@@ -1,14 +1,14 @@
 'use strict';
 
 // 保存データ（JSON）のツリー操作
-//   Document = { format, tabs: [Tab] }
+//   Document = { format, tabs: [Tab], shortcuts? }（shortcuts はショートカットキーの割り当て { 操作の ID: Combo }。shortcut.js を参照）
 //   Tab      = { id, name?, root: Item, options: TabOptions, filter?: TabFilter }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
 //   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active, hidden? }
 //              （フィルタの条件と、フィルタ中か。hidden はフィルタ中に [+] で隠しているアイテムの ID（フィルタ後の開閉状態））
 //   TabOptions = { horizontalAlign: 'depth'|'compact', parentAlign: 'center'|'top', followScroll, maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
-//   Item     = { id, text, collapsed, children: [Item], created, updated, spans?, fill?, align?, status?, hidden? }
+//   Item     = { id, text, collapsed, children: [Item], created, updated, spans?, fill?, align?, status?, width?, hidden? }
 //              （created・updated は登録日時・更新日時の ISO 8601 文字列（UTC）。更新日時は文字列・ステータスの変更時に更新する）
-//              （装飾は richText.js を参照、status はステータス名、hidden は「非表示にする」で [+] に隠したか（true のみ記録。ルートには付けない））
+//              （装飾は richText.js を参照、status はステータス名、width は枠の右端のドラッグで変えた表示幅（文字領域の幅 px。無ければ自動）、hidden は「非表示にする」で [+] に隠したか（true のみ記録。ルートには付けない））
 const Model = {
   FORMAT: 1,
 
@@ -36,6 +36,14 @@ const Model = {
     const name = typeof status === 'string' ? status.trim() : '';
     if (name) item.status = name;
     else delete item.status;
+    return item;
+  },
+
+  // アイテムの表示幅（文字領域の幅 px）を設定する。正の数でなければ削除（自動的に計算する幅に戻す）
+  assignWidth(item, width) {
+    const w = Math.round(Number(width));
+    if (Number.isFinite(w) && w > 0) item.width = w;
+    else delete item.width;
     return item;
   },
 
@@ -205,10 +213,11 @@ const Model = {
       const updated = Model.validTime(item.updated);
       fixed.created = created || updated || Model.now();
       fixed.updated = updated || fixed.created;
+      Model.assignWidth(fixed, item.width);
       if (item.hidden === true) fixed.hidden = true;
       return fixed;
     };
-    return {
+    const doc = {
       format: Model.FORMAT,
       tabs: raw.tabs.map((tab) => {
         const fixed = { id: uniqueId(tab && tab.id), root: fixItem(tab && tab.root) };
@@ -224,6 +233,9 @@ const Model = {
         return fixed;
       }),
     };
+    const shortcuts = Shortcut.normalize(raw.shortcuts);
+    if (shortcuts) doc.shortcuts = shortcuts;
+    return doc;
   },
 
   // タブとその全アイテムに新しい ID を振る（外部ファイルから追加する時に既存の ID と重ならないように）

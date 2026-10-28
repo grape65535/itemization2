@@ -13,12 +13,14 @@ const FileExport = {
 
   // ---- JSON ----
 
-  // 「名前をつけて保存」の JSON（内部データ形式の文書から表示タブだけを切り出したもの）
-  tabJson(tab) {
-    return JSON.stringify({ format: Model.FORMAT, tabs: [tab] }, null, 2);
+  // 「名前をつけて保存」の JSON（内部データ形式の文書から表示タブだけを切り出したもの。ショートカットキーの割り当てがあれば含める）
+  tabJson(tab, shortcuts) {
+    const doc = { format: Model.FORMAT, tabs: [tab] };
+    if (shortcuts) doc.shortcuts = shortcuts;
+    return JSON.stringify(doc, null, 2);
   },
 
-  // 開いたファイルの内容から、追加するタブの配列（ID は振り直す）を返す。開けない形式なら null
+  // 開いたファイルの内容から { tabs: 追加するタブの配列（ID は振り直す）, shortcuts: ショートカットキーの割り当て（無ければ null） } を返す。開けない形式なら null
   parseFile(text) {
     const body = text.replace(/^﻿/, '').trim();
     let json = null;
@@ -33,7 +35,7 @@ const FileExport = {
     }
     if (!raw || !Array.isArray(raw.tabs) || !raw.tabs.every((t) => t && t.root && typeof t.root === 'object')) return null;
     const doc = Model.normalize(raw);
-    return doc ? doc.tabs.map((tab) => Model.reassignIds(tab)) : null;
+    return doc ? { tabs: doc.tabs.map((tab) => Model.reassignIds(tab)), shortcuts: doc.shortcuts || null } : null;
   },
 
   svgMetadata(text) {
