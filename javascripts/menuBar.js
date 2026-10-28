@@ -68,7 +68,15 @@ class MenuBar {
             ],
           },
           { separator: true },
-          { label: 'ステータスを設定', dynamic: true, submenu: () => app.statusMenuItems(), enabled: () => app.selectedIds().length > 0 },
+          {
+            id: 'edit.setStatus',
+            label: 'ステータスを設定',
+            // サブメニュー（タブごとのステータス）は一覧に載せず、ショートカットキーでは最も上に登録されたステータスを設定する
+            dynamic: true,
+            shortcutAction: () => app.setFirstStatus(),
+            submenu: () => app.statusMenuItems(),
+            enabled: () => app.selectedIds().length > 0,
+          },
           { id: 'edit.clearStatus', label: 'ステータスを削除', action: () => app.clearStatus(), enabled: () => app.selectedHasStatus() },
           { separator: true },
           { id: 'edit.filter', label: 'フィルタを設定', action: () => app.filterDialog.open() },
@@ -198,8 +206,10 @@ class MenuBar {
     };
     for (const menu of this.menus) {
       for (const def of menu.items) {
-        if (def.separator || def.dynamic) continue;
-        if (def.submenu) {
+        if (def.separator) continue;
+        if (def.dynamic) {
+          if (def.shortcutAction) add(Object.assign({}, def, { action: def.shortcutAction }), [menu.label]);
+        } else if (def.submenu) {
           for (const entry of def.submenu()) add(entry, [menu.label, def.label], def);
         } else {
           add(def, [menu.label]);

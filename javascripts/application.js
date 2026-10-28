@@ -423,6 +423,12 @@ class Application {
   }
 
   // 選択中のアイテムにステータスを設定する（name が null なら削除）。1 回の Undo で戻る
+  // タブの設定で最も上に登録されたステータスを設定する（ショートカットキーの「ステータスを設定」）。登録が無ければ何もしない
+  setFirstStatus() {
+    const first = this.activeTab.options.statuses[0];
+    if (first) this.setStatus(first.name);
+  }
+
   setStatus(name) {
     this.editor.end();
     const ids = this.selectedIds();
