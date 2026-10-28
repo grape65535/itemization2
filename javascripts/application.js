@@ -224,6 +224,13 @@ class Application {
     }, { itemId: id });
   }
 
+  // アイテムの表示幅（文字領域の幅 px）を変える。null で自動的に計算する幅に戻す
+  setItemWidth(id, width) {
+    this.commit((doc) => {
+      Model.assignWidth(Model.locate(doc, id).item, width);
+    }, { itemId: id });
+  }
+
   // ids を target { id, mode: 'before'|'after'|'child' } の位置へ兄弟として並べて移動する
   moveItems(ids, target) {
     this.commit((doc) => {

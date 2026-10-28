@@ -3,7 +3,7 @@
 // アプリ全体の定数・設定値
 const Config = {
   appName: 'Itemization',
-  version: 'v2.2.28',
+  version: 'v2.2.29',
 
   // localStorage のキー
   storageKeyDocument: 'itemization2.document',
@@ -24,6 +24,7 @@ const Config = {
   maxContentWidth: 360, // アイテムの最大表示幅の初期値（タブの設定で変更可能）
   cornerRadius: 6,
   borderHitWidth: 3, // 枠線の両側この幅(px)以内のクリックは枠線クリックとみなす
+  resizeMinChar: 'あ', // 枠の右端のドラッグで変える表示幅の最小（この全角文字 1 文字分の幅）
 
   // ツリー配置
   margin: 24,

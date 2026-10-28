@@ -44,7 +44,7 @@ class MainArea {
     window.addEventListener('mouseup', (e) => this.onMouseUp(e));
     // ドラッグ中の右クリックでキャンセル
     window.addEventListener('mousedown', (e) => {
-      if (e.button === 2 && this.drag && this.drag.type === 'item') {
+      if (e.button === 2 && this.drag && (this.drag.type === 'item' || this.drag.type === 'resize')) {
         this.cancelDrag();
         this.suppressContextMenu = true;
       }
@@ -71,7 +71,9 @@ class MainArea {
     }
     const override = this.editor.isEditing ? this.editor.override : null;
     const filter = this.app.activeFilter;
-    this.layout = TreeLayout.compute(tab.root, this.measurer, override, tab.options, filter && filter.hidden);
+    const d = this.drag;
+    const resize = d && d.type === 'resize' && d.moved ? { id: d.id, width: d.width } : null;
+    this.layout = TreeLayout.compute(tab.root, this.measurer, override, tab.options, filter && filter.hidden, resize);
     this.spacer.style.width = this.layout.width + 'px';
     this.spacer.style.height = this.layout.height + 'px';
     if (this.renderedTabId !== tab.id) {
@@ -212,8 +214,10 @@ class MainArea {
         const t = TreeLayout.toggleRect(n);
         if (p.x >= t.x - 2 && p.x <= t.x + t.w + 2 && p.y >= t.y - 2 && p.y <= t.y + t.h + 2) return { type: 'toggle', id: n.id };
       }
-      // 枠線（1px）とその両側 b px を「枠」とみなす。ステータスのバッジの行（文字列より上）も枠と同じ扱い（バッジ自体は 'status'）
+      // 枠線（1px）とその両側 b px を「枠」とみなす。ステータスのバッジの行（文字列より上）も枠と同じ扱い（バッジ自体は 'status'）。
+      // 右端の枠は表示幅の変更（'resize'）
       if (p.x >= n.x - b && p.x < n.x + n.w + b && p.y >= n.y - b && p.y < n.y + n.h + b) {
+        if (p.x >= n.x + n.w - 1 - b) return { type: 'item', id: n.id, part: 'resize' };
         if (n.status) {
           const s = this.statusRect(n);
           if (p.x >= s.x && p.x < s.x + s.w && p.y >= s.y && p.y < s.y + s.h) return { type: 'item', id: n.id, part: 'status' };
@@ -255,7 +259,7 @@ class MainArea {
     if (this.drag) return;
     const p = this.layout && this.toContent(e);
     const hit = this.layout && this.hitTest(p);
-    this.scroller.style.cursor = !hit ? 'default' : hit.type === 'toggle' || hit.type === 'placeholder' || hit.part === 'status' || this.linkAt(hit, p) ? 'pointer'
+    this.scroller.style.cursor = !hit ? 'default' : hit.part === 'resize' ? 'ew-resize' : hit.type === 'toggle' || hit.type === 'placeholder' || hit.part === 'status' || this.linkAt(hit, p) ? 'pointer'
       : hit.part === 'inner' ? 'text' : 'default';
   }
 
@@ -300,6 +304,18 @@ class MainArea {
     // 文字入力中でなければ、ハイパーリンクのクリック（ドラッグしなかった時）で URL を開く
     const link = modifier ? null : this.linkAt(hit, p);
     this.editor.end();
+
+    // 枠の右端：ドラッグで表示幅を変える（ドラッグせずに離せば選択のみ）。ダブルクリックで自動的に計算する幅に戻す
+    if (hit && hit.part === 'resize' && !modifier) {
+      if (e.detail === 2) {
+        this.app.setItemWidth(hit.id, null);
+        return;
+      }
+      const width = this.layout.nodes.get(hit.id).contentWidth;
+      this.drag = { type: 'resize', id: hit.id, start: p, startWidth: width, width, client: { x: e.clientX, y: e.clientY }, moved: false };
+      this.scroller.style.cursor = 'ew-resize';
+      return;
+    }
 
     if (hit) {
       if (modifier) {
@@ -382,6 +398,19 @@ class MainArea {
         this.updateMarquee();
         this.draw();
         break;
+      case 'resize': {
+        if (!d.moved && dist(d.client) < Config.dragThreshold) break;
+        d.moved = true;
+        this.autoScroll(e);
+        // 最小は全角文字 1 文字分、最大は制限しない（タブの設定の最大表示幅も超えられる）
+        const min = Math.ceil(this.measurer.charWidth(Config.resizeMinChar));
+        const width = Math.max(min, Math.round(d.startWidth + this.toContent(e).x - d.start.x));
+        if (width !== d.width) {
+          d.width = width;
+          this.render();
+        }
+        break;
+      }
       case 'text': {
         if (this.editor.editingId !== d.id) break;
         // アイテムの枠外へ一定距離以上離れたら、入力を確定してアイテムのドラッグ移動に切り替える（ルートは移動できないので範囲選択のまま）
@@ -424,6 +453,15 @@ class MainArea {
       case 'item':
         if (d.target) this.app.moveItems(d.ids, d.target);
         else this.draw();
+        break;
+      case 'resize':
+        if (d.moved) {
+          this.app.setItemWidth(d.id, d.width);
+        } else {
+          sel.clear();
+          sel.add(d.id);
+          this.draw();
+        }
         break;
       case 'pan':
         break;
@@ -503,9 +541,12 @@ class MainArea {
 
   cancelDrag() {
     if (!this.drag) return false;
+    const resized = this.drag.type === 'resize' && this.drag.moved;
     this.drag = null;
     this.scroller.style.cursor = 'default';
-    this.draw();
+    // 表示幅の変更中は、変更前の幅で配置し直す
+    if (resized) this.render();
+    else this.draw();
     return true;
   }
 

@@ -8,7 +8,8 @@ const TreeLayout = {
   // options: タブの設定（最大表示幅 maxWidth、横位置 horizontalAlign、親の縦位置 parentAlign）
   // hidden: フィルタで隠すアイテムの ID の Set。これと「非表示にする」で隠したアイテム（item.hidden）を、
   //   連続する兄弟ごとに 1 つの [+]（隠れたアイテムの展開アイコン）にまとめる
-  compute(root, measurer, override, options, hidden) {
+  // resize: 枠の右端をドラッグ中のアイテムの { id, width }（確定前の表示幅で寸法を計算するため）
+  compute(root, measurer, override, options, hidden, resize) {
     const C = Config;
     const maxWidth = (options && options.maxWidth) || C.maxContentWidth;
     const parentTop = !!options && options.parentAlign === 'top';
@@ -23,7 +24,9 @@ const TreeLayout = {
       const text = src.text;
       // 表示用のスタイル（URL はハイパーリンクの見た目）。幅は装飾のスタイルと同じ
       const styles = RichText.displayStyles(text, src === item ? RichText.toArray(text, item.spans) : RichText.fit(src.styles, text.length));
-      const lines = measurer.wrap(text, maxWidth, styles);
+      // 表示幅（item.width）を変えたアイテムは、最大表示幅に関係なくその幅で折り返し、幅を固定する（はみ出す文字・バッジがあればそれに合わせる）
+      const fixedWidth = resize && resize.id === item.id ? resize.width : item.width || null;
+      const lines = measurer.wrap(text, fixedWidth || maxWidth, styles);
       // ステータスのバッジ（文字領域の左上。文字列はその下から始める）
       let status = null;
       if (item.status) {
@@ -31,7 +34,7 @@ const TreeLayout = {
         status.w = Math.ceil(measurer.textWidth(item.status, C.statusFont)) + C.statusPaddingX * 2;
         status.h = C.statusHeight;
       }
-      let contentWidth = Math.max(C.minContentWidth, status ? status.w : 0);
+      let contentWidth = Math.max(fixedWidth || C.minContentWidth, status ? status.w : 0);
       for (const line of lines) contentWidth = Math.max(contentWidth, line.width);
       contentWidth = Math.ceil(contentWidth);
       // 行の縦位置と、寄せ方による横位置（文字領域の左端から）
