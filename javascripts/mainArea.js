@@ -74,7 +74,10 @@ class MainArea {
     const d = this.drag;
     const resize = d && d.type === 'resize' && d.moved ? { id: d.id, width: d.width } : null;
     this.layout = TreeLayout.compute(tab.root, this.measurer, override, tab.options, filter && filter.hidden, resize);
-    this.spacer.style.width = this.layout.width + 'px';
+    // 表示幅の変更中は、ページの横幅をドラッグ中の最大に保つ（縮めた時にスクロール位置がずれてドラッグ量が狂わないように）
+    let pageWidth = this.layout.width;
+    if (d && d.type === 'resize') pageWidth = d.pageWidth = Math.max(d.pageWidth || 0, pageWidth);
+    this.spacer.style.width = pageWidth + 'px';
     this.spacer.style.height = this.layout.height + 'px';
     if (this.renderedTabId !== tab.id) {
       const pos = this.scrollPositions.get(tab.id) || { x: 0, y: 0 };
@@ -312,7 +315,7 @@ class MainArea {
         return;
       }
       const width = this.layout.nodes.get(hit.id).contentWidth;
-      this.drag = { type: 'resize', id: hit.id, start: p, startWidth: width, width, client: { x: e.clientX, y: e.clientY }, moved: false };
+      this.drag = { type: 'resize', id: hit.id, start: p, startWidth: width, width, pageWidth: this.layout.width, client: { x: e.clientX, y: e.clientY }, moved: false };
       this.scroller.style.cursor = 'ew-resize';
       return;
     }

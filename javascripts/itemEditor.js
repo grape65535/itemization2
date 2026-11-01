@@ -592,7 +592,9 @@ class ItemEditor {
       }
       return { itemId: newId };
     }, { itemId: id });
+    // 選択状態は新しいアイテムに移す
     this.app.selection.clear();
+    this.app.selection.add(newId);
     this.editingId = null;
     this.start(newId, 0);
   }
