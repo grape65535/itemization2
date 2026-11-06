@@ -399,6 +399,46 @@ class Application {
     }, { itemId: targets[0] });
   }
 
+  // ---- 子・子孫を開く／閉じる ----
+
+  // item の子（deep なら全ての子孫）のうち、子のあるアイテム（開閉できるもの）。
+  // フィルタ・非表示で隠したアイテムとその子孫は除く
+  foldableChildren(item, deep, out = []) {
+    for (const child of item.children) {
+      if (this.isHiddenItem(child)) continue;
+      if (child.children.length > 0) out.push(child);
+      if (deep) this.foldableChildren(child, deep, out);
+    }
+    return out;
+  }
+
+  // 選択中のアイテムのうち、開く（collapsed = false）／閉じる（true）対象の子（deep なら子孫）の ID
+  childFoldTargets(collapsed, deep) {
+    const ids = [];
+    for (const id of this.selectedIds()) {
+      for (const item of this.foldableChildren(this.index.get(id).item, deep)) {
+        if (!!item.collapsed !== collapsed) ids.push(item.id);
+      }
+    }
+    return ids;
+  }
+
+  // 表示 → 子を開く／子を閉じる／子孫を全て開く／子孫を全て閉じる（選択中のアイテムが対象。1 回の Undo で戻る）。
+  // 開く時は、開いた子が見えるよう選択中のアイテム自身も開く
+  setChildrenCollapsed(collapsed, deep) {
+    this.editor.end();
+    const ids = this.selectedIds();
+    const targets = this.childFoldTargets(collapsed, deep);
+    if (targets.length === 0) return;
+    this.commit((doc) => {
+      for (const id of targets) Model.locate(doc, id).item.collapsed = collapsed;
+      if (!collapsed) {
+        for (const id of ids) Model.locate(doc, id).item.collapsed = false;
+      }
+      return { itemId: ids[0] };
+    }, { itemId: ids[0] });
+  }
+
   // ---- ステータス ----
 
   // 「ステータスを設定」のサブメニュー（タブの設定に登録されたステータス）

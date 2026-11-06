@@ -89,6 +89,11 @@ class MenuBar {
           { id: 'view.expandAll', label: 'ツリーを全て開く', shortcut: ';', action: () => app.setTreeCollapsed(false) },
           { id: 'view.collapseAll', label: 'ツリーを全て閉じる', shortcut: '-', action: () => app.setTreeCollapsed(true) },
           { separator: true },
+          { id: 'view.expandChildren', label: '子を開く', action: () => app.setChildrenCollapsed(false, false), enabled: () => app.childFoldTargets(false, false).length > 0 },
+          { id: 'view.collapseChildren', label: '子を閉じる', action: () => app.setChildrenCollapsed(true, false), enabled: () => app.childFoldTargets(true, false).length > 0 },
+          { id: 'view.expandDescendants', label: '子孫を全て開く', action: () => app.setChildrenCollapsed(false, true), enabled: () => app.childFoldTargets(false, true).length > 0 },
+          { id: 'view.collapseDescendants', label: '子孫を全て閉じる', action: () => app.setChildrenCollapsed(true, true), enabled: () => app.childFoldTargets(true, true).length > 0 },
+          { separator: true },
           { id: 'view.hide', label: '非表示にする', action: () => app.hideSelected(), enabled: () => app.selectedIds().length > 0 },
           { separator: true },
           {
@@ -116,13 +121,15 @@ class MenuBar {
     // アイテムの右クリックメニュー（項目は編集メニューと共通）
     const editItems = this.menus.find((m) => m.label === '編集').items;
     const pick = (label) => editItems.find((d) => d.label === label);
-    const hideItem = this.menus.find((m) => m.label === '表示').items.find((d) => d.label === '非表示にする');
+    const viewItems = this.menus.find((m) => m.label === '表示').items;
+    const pickView = (label) => viewItems.find((d) => d.label === label);
     this.contextItems = [
       pick('コピー'), pick('切り取り'), pick('貼り付け'), { separator: true },
       pick('アイテムを追加'), pick('アイテムを削除'), { separator: true },
       pick('ステータスを設定'), pick('ステータスを削除'), { separator: true },
       pick('フィルタを設定'), pick('フィルタを削除'), { separator: true },
-      hideItem,
+      pickView('非表示にする'),
+      pickView('子を開く'), pickView('子を閉じる'), pickView('子孫を全て開く'), pickView('子孫を全て閉じる'),
     ];
     // アイテム外の右クリックメニュー
     this.contextOutsideItems = [pick('フィルタを設定'), pick('フィルタを削除')];
