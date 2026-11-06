@@ -5,7 +5,7 @@
 //   Tab      = { id, name?, root: Item, options: TabOptions, filter?: TabFilter }（name はユーザーが付けたタブ名。無ければルートの文字列から生成）
 //   TabFilter = { text, ignoreCase, regex, hideStatuses, hideUnregistered, hideNoStatus, active, hidden? }
 //              （フィルタの条件と、フィルタ中か。hidden はフィルタ中に [+] で隠しているアイテムの ID（フィルタ後の開閉状態））
-//   TabOptions = { horizontalAlign: 'depth'|'compact', parentAlign: 'center'|'top', followScroll, maxWidth: 100〜1000, statuses: [{ name, color }] }（タブの設定）
+//   TabOptions = { horizontalAlign: 'depth'|'compact', parentAlign: 'center'|'top', followScroll, maxWidth: 100〜1000, statuses: [{ name, color }], edgeOnlyMove }（タブの設定）
 //   Item     = { id, text, collapsed, children: [Item], created, updated, spans?, fill?, align?, status?, width?, hidden? }
 //              （created・updated は登録日時・更新日時の ISO 8601 文字列（UTC）。更新日時は文字列・ステータスの変更時に更新する）
 //              （装飾は richText.js を参照、status はステータス名、width は枠の右端のドラッグで変えた表示幅（文字領域の幅 px。無ければ自動）、hidden は「非表示にする」で [+] に隠したか（true のみ記録。ルートには付けない））
@@ -80,6 +80,7 @@ const Model = {
       followScroll: !!o.followScroll,
       maxWidth: Number.isFinite(width) ? Util.clamp(width, minW, maxW) : C.maxContentWidth,
       statuses,
+      edgeOnlyMove: !!o.edgeOnlyMove,
     };
   },
 

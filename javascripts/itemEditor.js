@@ -524,6 +524,7 @@ class ItemEditor {
     const [anchor, focus] = this.anchorFocus();
     const lineIndex = TextMeasurer.lineIndexOf(lines, focus);
     const line = lines[lineIndex];
+    const edgeOnly = !!this.app.activeTab.options.edgeOnlyMove;
 
     switch (e.key) {
       case 'ArrowUp':
@@ -532,6 +533,11 @@ class ItemEditor {
         const up = e.key === 'ArrowUp';
         const edge = up ? lineIndex === 0 : lineIndex === lines.length - 1;
         if (edge && plain && noSelection) {
+          // タブの設定「他アイテムへの移動は一行目行頭と最終行行末だけ」なら、まず行頭（↑）・行末（↓）へ
+          if (edgeOnly && start !== (up ? 0 : text.length)) {
+            this.setSelection(up ? 0 : text.length, up ? 0 : text.length);
+            return;
+          }
           // 表示上の 1 行目の↑・最終行の↓は、同じ階層の前後のアイテムへ
           const target = this.area.sameDepthNeighbor(id, up ? -1 : 1);
           if (target) this.start(target, { line: up ? 'last' : 'first', col: start - line.start });
@@ -560,15 +566,18 @@ class ItemEditor {
     }
 
     if (!plain || !noSelection) return;
+    // edgeOnly の時、1 行目の行頭以外の←・最終行の行末以外の→は既定の動作（前行の行末・次行の行頭へ）
     switch (e.key) {
       case 'ArrowLeft':
         if (start !== line.start || node.parentId === null) return;
+        if (edgeOnly && start !== 0) return;
         e.preventDefault();
         this.start(node.parentId, { line: lineIndex, pos: 'end' });
         return;
       case 'ArrowRight': {
         const child = node.children.find((c) => !c.placeholder); // フィルタ・非表示で隠したアイテムには移らない
         if (start !== line.end || !child) return;
+        if (edgeOnly && start !== text.length) return;
         e.preventDefault();
         this.start(child.id, { line: lineIndex, pos: 'start' });
         return;

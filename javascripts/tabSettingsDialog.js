@@ -100,6 +100,14 @@ class TabSettingsDialog {
     statusField.classList.add('settings-field-block');
     body.append(statusField);
 
+    // カーソル移動（文字入力中の矢印キーで他のアイテムへ移るのを、1 行目の行頭と最終行の行末からだけにする）
+    const edgeLabel = Util.el('label', 'settings-check');
+    const edgeInput = Util.el('input');
+    edgeInput.type = 'checkbox';
+    edgeInput.checked = options.edgeOnlyMove;
+    edgeLabel.append(edgeInput, Util.el('span', '', '他アイテムへの移動は一行目行頭と最終行行末だけ'));
+    body.append(this.field('カーソル移動', edgeLabel));
+
     this.error = Util.el('div', 'settings-error');
     body.append(this.error);
 
@@ -109,7 +117,7 @@ class TabSettingsDialog {
     const ok = Util.el('button', 'settings-button primary', 'OK');
     ok.type = 'button';
     cancel.addEventListener('click', () => this.close());
-    ok.addEventListener('click', () => this.submit(horizontalSelect.value, alignSelect.value, followInput.checked, Number(widthInput.value)));
+    ok.addEventListener('click', () => this.submit(horizontalSelect.value, alignSelect.value, followInput.checked, Number(widthInput.value), edgeInput.checked));
     footer.append(cancel, ok);
 
     dialog.append(title, body, footer);
@@ -211,7 +219,7 @@ class TabSettingsDialog {
   }
 
   // 入力を検証して反映する（ステータス名は前後の空白を除いて 1〜12 文字で、重複しないこと）
-  submit(horizontalAlign, parentAlign, followScroll, maxWidth) {
+  submit(horizontalAlign, parentAlign, followScroll, maxWidth, edgeOnlyMove) {
     const statuses = [];
     const renames = new Map(); // 元の名前 -> 新しい名前
     const seen = new Set();
@@ -240,7 +248,7 @@ class TabSettingsDialog {
       return;
     }
     const tabId = this.tabId;
-    const options = Model.normalizeOptions({ horizontalAlign, parentAlign, followScroll, maxWidth, statuses });
+    const options = Model.normalizeOptions({ horizontalAlign, parentAlign, followScroll, maxWidth, statuses, edgeOnlyMove });
     this.close();
     this.app.commit((doc) => {
       const tab = doc.tabs.find((t) => t.id === tabId);
