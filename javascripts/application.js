@@ -400,41 +400,42 @@ class Application {
   }
 
   // ---- 子・子孫を開く／閉じる ----
+  // 子（子孫）が「閉じている」とは、そのアイテム自身が表示されないこと：親が折り畳み中か、
+  // フィルタ・「非表示にする」の [+] で隠れている。子孫は親側が閉じていても、自身の状態で判定する
 
-  // item の子（deep なら全ての子孫）のうち、子のあるアイテム（開閉できるもの）。
-  // フィルタ・非表示で隠したアイテムとその子孫は除く
-  foldableChildren(item, deep, out = []) {
-    for (const child of item.children) {
-      if (this.isHiddenItem(child)) continue;
-      if (child.children.length > 0) out.push(child);
-      if (deep) this.foldableChildren(child, deep, out);
-    }
-    return out;
+  // 選択中のアイテムの子（deep なら孫・ひ孫など末端までの子孫）に、閉じている（closed = true）／開いている（false）ものがあるか
+  hasChildInState(closed, deep) {
+    const walk = (parent) => parent.children.some((child) =>
+      (!!parent.collapsed || this.isHiddenItem(child)) === closed || (deep && walk(child)));
+    return this.selectedIds().some((id) => walk(this.index.get(id).item));
   }
 
-  // 選択中のアイテムのうち、開く（collapsed = false）／閉じる（true）対象の子（deep なら子孫）の ID
-  childFoldTargets(collapsed, deep) {
-    const ids = [];
-    for (const id of this.selectedIds()) {
-      for (const item of this.foldableChildren(this.index.get(id).item, deep)) {
-        if (!!item.collapsed !== collapsed) ids.push(item.id);
-      }
-    }
-    return ids;
-  }
-
-  // 表示 → 子を開く／子を閉じる／子孫を全て開く／子孫を全て閉じる（選択中のアイテムが対象。1 回の Undo で戻る）。
-  // 開く時は、開いた子が見えるよう選択中のアイテム自身も開く
-  setChildrenCollapsed(collapsed, deep) {
+  // 表示 → 子を開く／子を閉じる／子孫を全て開く／子孫を全て閉じる（選択中のアイテムが対象。1 回の Undo で戻る）
+  //   開く: 選択中のアイテム（deep なら子孫も）を展開し、子（deep なら子孫）の [+] で隠した状態を解除する
+  //   閉じる: 選択中のアイテム（deep なら子のある子孫も）を折り畳む
+  setChildrenClosed(closed, deep) {
     this.editor.end();
     const ids = this.selectedIds();
-    const targets = this.childFoldTargets(collapsed, deep);
-    if (targets.length === 0) return;
+    if (ids.length === 0 || !this.hasChildInState(!closed, deep)) return;
+    const tabId = this.activeTabId;
     this.commit((doc) => {
-      for (const id of targets) Model.locate(doc, id).item.collapsed = collapsed;
-      if (!collapsed) {
-        for (const id of ids) Model.locate(doc, id).item.collapsed = false;
-      }
+      const tab = doc.tabs.find((t) => t.id === tabId);
+      const opened = [];
+      const apply = (item, isSelected) => {
+        if (!isSelected && !closed) {
+          delete item.hidden;
+          opened.push(item.id);
+        }
+        if (isSelected || deep) {
+          if (item.children.length > 0) item.collapsed = closed;
+          for (const child of item.children) {
+            if (deep) apply(child, false);
+            else if (!closed) apply(child, false);
+          }
+        }
+      };
+      for (const id of ids) apply(Model.locate(doc, id).item, true);
+      if (opened.length) Model.unhideFiltered(tab, opened);
       return { itemId: ids[0] };
     }, { itemId: ids[0] });
   }
